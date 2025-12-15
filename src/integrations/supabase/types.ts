@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          name: string
+          requirement_type: string
+          requirement_value: number
+          xp_reward: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          icon: string
+          id?: string
+          name: string
+          requirement_type: string
+          requirement_value: number
+          xp_reward?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          name?: string
+          requirement_type?: string
+          requirement_value?: number
+          xp_reward?: number
+        }
+        Relationships: []
+      }
       habit_logs: {
         Row: {
           completed: boolean
@@ -60,6 +93,8 @@ export type Database = {
           description: string | null
           frequency: Database["public"]["Enums"]["habit_frequency"]
           id: string
+          reminder_enabled: boolean | null
+          reminder_time: string | null
           target_count: number
           title: string
           updated_at: string
@@ -72,6 +107,8 @@ export type Database = {
           description?: string | null
           frequency?: Database["public"]["Enums"]["habit_frequency"]
           id?: string
+          reminder_enabled?: boolean | null
+          reminder_time?: string | null
           target_count?: number
           title: string
           updated_at?: string
@@ -84,6 +121,8 @@ export type Database = {
           description?: string | null
           frequency?: Database["public"]["Enums"]["habit_frequency"]
           id?: string
+          reminder_enabled?: boolean | null
+          reminder_time?: string | null
           target_count?: number
           title?: string
           updated_at?: string
@@ -112,6 +151,62 @@ export type Database = {
           email?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      user_achievements: {
+        Row: {
+          achievement_id: string
+          id: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          achievement_id: string
+          id?: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          achievement_id?: string
+          id?: string
+          unlocked_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_achievements_achievement_id_fkey"
+            columns: ["achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_rewards: {
+        Row: {
+          created_at: string
+          id: string
+          level: number
+          updated_at: string
+          user_id: string
+          xp_points: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          level?: number
+          updated_at?: string
+          user_id: string
+          xp_points?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level?: number
+          updated_at?: string
+          user_id?: string
+          xp_points?: number
         }
         Relationships: []
       }

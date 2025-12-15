@@ -11,6 +11,8 @@ export interface Habit {
   frequency: HabitFrequency;
   target_count: number;
   color: string;
+  reminder_time: string | null;
+  reminder_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +34,7 @@ export interface HabitWithStats extends Habit {
   completionRate: number;
   missedDays: number;
   totalDays: number;
+  logs: HabitLog[];
 }
 
 export interface Profile {
@@ -40,6 +43,48 @@ export interface Profile {
   display_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserRewards {
+  id: string;
+  user_id: string;
+  xp_points: number;
+  level: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  requirement_type: 'streak' | 'completions' | 'habits_created' | 'days_active';
+  requirement_value: number;
+  xp_reward: number;
+  created_at: string;
+}
+
+export interface UserAchievement {
+  id: string;
+  user_id: string;
+  achievement_id: string;
+  unlocked_at: string;
+  achievement?: Achievement;
+}
+
+export interface WeeklyData {
+  day: string;
+  completed: number;
+  total: number;
+  percentage: number;
+}
+
+export interface MonthlyData {
+  week: string;
+  completed: number;
+  total: number;
+  percentage: number;
 }
 
 export const CATEGORY_CONFIG: Record<HabitCategory, { label: string; icon: string; color: string }> = {
@@ -56,4 +101,15 @@ export const FREQUENCY_CONFIG: Record<HabitFrequency, { label: string; days: num
   daily: { label: 'Daily', days: 1 },
   weekly: { label: 'Weekly', days: 7 },
   monthly: { label: 'Monthly', days: 30 },
+};
+
+export const XP_PER_COMPLETION = 10;
+export const XP_PER_LEVEL = 100;
+
+export const calculateLevel = (xp: number): number => {
+  return Math.floor(xp / XP_PER_LEVEL) + 1;
+};
+
+export const calculateXpProgress = (xp: number): number => {
+  return xp % XP_PER_LEVEL;
 };
