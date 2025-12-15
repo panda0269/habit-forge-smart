@@ -1,21 +1,31 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useHabits } from '@/hooks/useHabits';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Plus, LogOut, Sparkles, Flame, Target, TrendingUp } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Loader2, Plus, LogOut, Sparkles, Flame, Target, TrendingUp, BarChart3, FileText, Trophy, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { HabitCard } from '@/components/HabitCard';
 import { CreateHabitDialog } from '@/components/CreateHabitDialog';
 import { AIRecommendations } from '@/components/AIRecommendations';
+import { useNotifications } from '@/hooks/useNotifications';
+import { useRewards } from '@/hooks/useRewards';
 
 export default function Index() {
   const { user, loading: authLoading, signOut } = useAuth();
   const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, getUserCategory } = useHabits();
+  const { permission, requestPermission, scheduleHabitReminders } = useNotifications();
+  const { rewards } = useRewards();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (habits.length > 0) {
+      scheduleHabitReminders(habits);
+    }
+  }, [habits, scheduleHabitReminders]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -55,10 +65,28 @@ export default function Index() {
             </div>
             <h1 className="text-xl font-display font-bold">Habit Builder</h1>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link to="/analytics">
+              <Button variant="ghost" size="sm"><BarChart3 className="w-4 h-4" /></Button>
+            </Link>
+            <Link to="/reports">
+              <Button variant="ghost" size="sm"><FileText className="w-4 h-4" /></Button>
+            </Link>
+            <Link to="/rewards">
+              <Button variant="ghost" size="sm" className="relative">
+                <Trophy className="w-4 h-4" />
+                {rewards && <span className="absolute -top-1 -right-1 text-[10px] bg-accent text-accent-foreground rounded-full w-4 h-4 flex items-center justify-center">{rewards.level}</span>}
+              </Button>
+            </Link>
+            {permission !== 'granted' && (
+              <Button variant="ghost" size="sm" onClick={requestPermission}>
+                <Bell className="w-4 h-4" />
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </header>
 

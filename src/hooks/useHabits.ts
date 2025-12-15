@@ -7,6 +7,7 @@ import { format, subDays, differenceInDays, startOfDay, parseISO } from 'date-fn
 export function useHabits() {
   const { user } = useAuth();
   const [habits, setHabits] = useState<HabitWithStats[]>([]);
+  const [allLogs, setAllLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,7 +16,6 @@ export function useHabits() {
     const habitLogs = logs.filter(log => log.habit_id === habit.id && log.completed);
     const completedToday = habitLogs.some(log => log.completed_at === today);
     
-    // Calculate streaks
     let currentStreak = 0;
     let longestStreak = 0;
     let tempStreak = 0;
@@ -24,7 +24,6 @@ export function useHabits() {
       .map(log => log.completed_at)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
     
-    // Calculate current streak (from today backwards)
     let checkDate = new Date();
     for (let i = 0; i < 365; i++) {
       const dateStr = format(checkDate, 'yyyy-MM-dd');
@@ -38,7 +37,6 @@ export function useHabits() {
       }
     }
     
-    // Calculate longest streak
     for (let i = 0; i < sortedDates.length; i++) {
       if (i === 0) {
         tempStreak = 1;
@@ -57,7 +55,6 @@ export function useHabits() {
     }
     longestStreak = Math.max(longestStreak, tempStreak);
     
-    // Calculate completion rate and missed days
     const habitCreatedDate = startOfDay(new Date(habit.created_at));
     const totalDays = Math.max(1, differenceInDays(new Date(), habitCreatedDate) + 1);
     const completedDays = habitLogs.length;
@@ -72,6 +69,7 @@ export function useHabits() {
       completionRate,
       missedDays,
       totalDays,
+      logs: habitLogs,
     };
   }, []);
 
@@ -101,8 +99,11 @@ export function useHabits() {
       if (habitsResponse.error) throw habitsResponse.error;
       if (logsResponse.error) throw logsResponse.error;
 
+      const logsData = logsResponse.data as HabitLog[];
+      setAllLogs(logsData);
+
       const habitsWithStats = (habitsResponse.data as Habit[]).map(habit => 
-        calculateStats(habit, logsResponse.data as HabitLog[])
+        calculateStats(habit, logsData)
       );
 
       setHabits(habitsWithStats);
@@ -216,6 +217,7 @@ export function useHabits() {
 
   return {
     habits,
+    allLogs,
     loading,
     error,
     createHabit,
