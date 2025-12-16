@@ -1,15 +1,15 @@
 import { useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useHabits } from '@/hooks/useHabits';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, TrendingUp, Calendar, Target, Flame, BarChart3 } from 'lucide-react';
+import { Loader2, TrendingUp, Calendar, Target, Flame } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { CATEGORY_CONFIG } from '@/lib/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { AppLayout } from '@/components/AppLayout';
 
 export default function Analytics() {
   const { user, loading: authLoading } = useAuth();
@@ -47,24 +47,10 @@ export default function Analytics() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
-      <header className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border/50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-glow">
-              <BarChart3 className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <h1 className="text-xl font-display font-bold">Analytics</h1>
-          </div>
-        </div>
-      </header>
+    <AppLayout>
+      <div className="p-6 lg:p-8 space-y-8">
+        <h1 className="text-2xl font-display font-bold">Analytics</h1>
 
-      <main className="container mx-auto px-4 py-8 space-y-8">
         {/* Overview Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card variant="elevated" className="animate-fade-in">
@@ -265,7 +251,7 @@ export default function Analytics() {
             </div>
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

@@ -1,23 +1,20 @@
-import { useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useHabits } from '@/hooks/useHabits';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Plus, LogOut, Sparkles, Flame, Target, TrendingUp, BarChart3, FileText, Trophy, Bell } from 'lucide-react';
-import { toast } from 'sonner';
-import { useState } from 'react';
+import { Loader2, Plus, Sparkles, Flame, Target, TrendingUp } from 'lucide-react';
 import { HabitCard } from '@/components/HabitCard';
 import { CreateHabitDialog } from '@/components/CreateHabitDialog';
 import { AIRecommendations } from '@/components/AIRecommendations';
+import { AppLayout } from '@/components/AppLayout';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useRewards } from '@/hooks/useRewards';
 
 export default function Index() {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, getUserCategory } = useHabits();
-  const { permission, requestPermission, scheduleHabitReminders } = useNotifications();
-  const { rewards } = useRewards();
+  const { scheduleHabitReminders } = useNotifications();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -32,12 +29,6 @@ export default function Index() {
       navigate('/auth');
     }
   }, [user, authLoading, navigate]);
-
-  const handleSignOut = async () => {
-    await signOut();
-    toast.success('Signed out successfully');
-    navigate('/auth');
-  };
 
   if (authLoading || habitsLoading) {
     return (
@@ -56,41 +47,8 @@ export default function Index() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
-      <header className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border/50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-glow">
-              <Sparkles className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <h1 className="text-xl font-display font-bold">Habit Builder</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link to="/analytics">
-              <Button variant="ghost" size="sm"><BarChart3 className="w-4 h-4" /></Button>
-            </Link>
-            <Link to="/reports">
-              <Button variant="ghost" size="sm"><FileText className="w-4 h-4" /></Button>
-            </Link>
-            <Link to="/rewards">
-              <Button variant="ghost" size="sm" className="relative">
-                <Trophy className="w-4 h-4" />
-                {rewards && <span className="absolute -top-1 -right-1 text-[10px] bg-accent text-accent-foreground rounded-full w-4 h-4 flex items-center justify-center">{rewards.level}</span>}
-              </Button>
-            </Link>
-            {permission !== 'granted' && (
-              <Button variant="ghost" size="sm" onClick={requestPermission}>
-                <Bell className="w-4 h-4" />
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={handleSignOut}>
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8 space-y-8">
+    <AppLayout>
+      <div className="p-6 lg:p-8 space-y-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card variant="elevated" className="animate-fade-in">
@@ -151,7 +109,7 @@ export default function Index() {
               </Button>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {habits.map((habit, index) => (
                 <HabitCard
                   key={habit.id}
@@ -169,9 +127,9 @@ export default function Index() {
         {habits.length > 0 && (
           <AIRecommendations habits={habits} userCategory={getUserCategory()} />
         )}
-      </main>
+      </div>
 
       <CreateHabitDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
-    </div>
+    </AppLayout>
   );
 }
