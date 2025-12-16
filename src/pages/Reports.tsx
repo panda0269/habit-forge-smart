@@ -1,15 +1,15 @@
 import { useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useHabits } from '@/hooks/useHabits';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, ArrowLeft, FileText, TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { CATEGORY_CONFIG, FREQUENCY_CONFIG } from '@/lib/types';
 import { format, subDays } from 'date-fns';
+import { AppLayout } from '@/components/AppLayout';
 
 export default function Reports() {
   const { user, loading: authLoading } = useAuth();
@@ -41,7 +41,6 @@ export default function Reports() {
   };
 
   const getTrend = (habit: typeof habits[0]) => {
-    // Compare last 7 days to previous 7 days
     const today = new Date();
     const last7Days = allLogs.filter(log => {
       const logDate = new Date(log.completed_at);
@@ -67,24 +66,10 @@ export default function Reports() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
-      <header className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border/50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-secondary to-secondary/70 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-secondary-foreground" />
-            </div>
-            <h1 className="text-xl font-display font-bold">Reports</h1>
-          </div>
-        </div>
-      </header>
+    <AppLayout>
+      <div className="p-6 lg:p-8 space-y-8">
+        <h1 className="text-2xl font-display font-bold">Reports</h1>
 
-      <main className="container mx-auto px-4 py-8 space-y-8">
         {/* Summary Card */}
         <Card variant="elevated" className="animate-fade-in">
           <CardHeader>
@@ -251,7 +236,7 @@ export default function Reports() {
             </ul>
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

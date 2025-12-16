@@ -121,6 +121,8 @@ export function useHabits() {
     category: HabitCategory;
     frequency: HabitFrequency;
     color?: string;
+    reminder_enabled?: boolean;
+    reminder_time?: string | null;
   }) => {
     if (!user) throw new Error('User not authenticated');
 
@@ -133,6 +135,8 @@ export function useHabits() {
         category: habitData.category,
         frequency: habitData.frequency,
         color: habitData.color || '#10B981',
+        reminder_enabled: habitData.reminder_enabled || false,
+        reminder_time: habitData.reminder_time || null,
       })
       .select()
       .single();

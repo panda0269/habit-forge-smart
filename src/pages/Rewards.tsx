@@ -1,16 +1,16 @@
 import { useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useRewards } from '@/hooks/useRewards';
 import { useHabits } from '@/hooks/useHabits';
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, ArrowLeft, Trophy, Star, Lock, Sparkles, Zap } from 'lucide-react';
+import { Loader2, Trophy, Star, Lock, Sparkles, Zap } from 'lucide-react';
 import { XP_PER_LEVEL, calculateXpProgress } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { AppLayout } from '@/components/AppLayout';
 
 export default function Rewards() {
   const { user, loading: authLoading } = useAuth();
@@ -50,26 +50,12 @@ export default function Rewards() {
   const unlockedIds = userAchievements.map(ua => ua.achievement_id);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
-      <header className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border/50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center shadow-streak">
-              <Trophy className="w-5 h-5 text-accent-foreground" />
-            </div>
-            <h1 className="text-xl font-display font-bold">Rewards</h1>
-          </div>
-        </div>
-      </header>
+    <AppLayout>
+      <div className="p-6 lg:p-8 space-y-8">
+        <h1 className="text-2xl font-display font-bold">Rewards</h1>
 
-      <main className="container mx-auto px-4 py-8 space-y-8">
         {/* Level & XP Card */}
-        <Card variant="elevated" className="animate-fade-in overflow-hidden">
+        <Card variant="elevated" className="animate-fade-in overflow-hidden relative">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/10" />
           <CardContent className="p-8 relative">
             <div className="flex flex-col md:flex-row items-center gap-6">
@@ -140,7 +126,7 @@ export default function Rewards() {
         {/* Achievements */}
         <div>
           <h2 className="text-xl font-display font-bold mb-4">Achievements</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {achievements.map((achievement, index) => {
               const isUnlocked = unlockedIds.includes(achievement.id);
               const userAchievement = userAchievements.find(ua => ua.achievement_id === achievement.id);
@@ -228,7 +214,7 @@ export default function Rewards() {
             </div>
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
