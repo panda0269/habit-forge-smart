@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useHabits } from '@/hooks/useHabits';
@@ -16,6 +16,7 @@ export default function Index() {
   const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, getUserCategory } = useHabits();
   const { scheduleHabitReminders } = useNotifications();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [aiTriggerCount, setAiTriggerCount] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,6 +30,15 @@ export default function Index() {
       navigate('/auth');
     }
   }, [user, authLoading, navigate]);
+
+  const handleToggleHabit = useCallback(async (habitId: string) => {
+    await toggleHabitCompletion(habitId);
+    setAiTriggerCount(prev => prev + 1);
+  }, [toggleHabitCompletion]);
+
+  const handleHabitCreated = useCallback(() => {
+    setAiTriggerCount(prev => prev + 1);
+  }, []);
 
   if (authLoading || habitsLoading) {
     return (
@@ -114,7 +124,7 @@ export default function Index() {
                 <HabitCard
                   key={habit.id}
                   habit={habit}
-                  onToggle={() => toggleHabitCompletion(habit.id)}
+                  onToggle={() => handleToggleHabit(habit.id)}
                   onDelete={() => deleteHabit(habit.id)}
                   style={{ animationDelay: `${index * 0.05}s` }}
                 />
@@ -125,11 +135,19 @@ export default function Index() {
 
         {/* AI Recommendations */}
         {habits.length > 0 && (
-          <AIRecommendations habits={habits} userCategory={getUserCategory()} />
+          <AIRecommendations 
+            habits={habits} 
+            userCategory={getUserCategory()} 
+            triggerCount={aiTriggerCount}
+          />
         )}
       </div>
 
-      <CreateHabitDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+      <CreateHabitDialog 
+        open={createDialogOpen} 
+        onOpenChange={setCreateDialogOpen} 
+        onHabitCreated={handleHabitCreated}
+      />
     </AppLayout>
   );
 }

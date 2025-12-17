@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,24 +10,27 @@ import { toast } from 'sonner';
 interface AIRecommendationsProps {
   habits: HabitWithStats[];
   userCategory: UserCategory;
+  triggerCount?: number; // Increments when habit is created or toggled
 }
 
-type AnalysisType = 'recommendations' | 'patterns' | 'insights' | 'coaching';
+type AnalysisType = 'suggestions' | 'patterns' | 'recommendations' | 'coaching';
 
 interface AnalysisResult {
   content: string;
   timestamp: Date;
 }
 
-export function AIRecommendations({ habits, userCategory }: AIRecommendationsProps) {
+export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AIRecommendationsProps) {
   const [analyses, setAnalyses] = useState<Record<AnalysisType, AnalysisResult | null>>({
-    recommendations: null,
+    suggestions: null,
     patterns: null,
-    insights: null,
+    recommendations: null,
     coaching: null,
   });
   const [loading, setLoading] = useState<AnalysisType | null>(null);
-  const [activeTab, setActiveTab] = useState<AnalysisType>('recommendations');
+  const [activeTab, setActiveTab] = useState<AnalysisType>('suggestions');
+  const lastTrigger = useRef(triggerCount);
+  const hasFetchedInitial = useRef(false);
 
   const fetchAnalysis = async (type: AnalysisType) => {
     setLoading(type);
@@ -42,10 +45,14 @@ export function AIRecommendations({ habits, userCategory }: AIRecommendationsPro
         longestStreak: h.longestStreak,
         missedDays: h.missedDays,
         totalDays: h.totalDays,
+        completedToday: h.completedToday,
       }));
 
+      // Map suggestions to 'recommendations' for the edge function
+      const apiType = type === 'suggestions' ? 'recommendations' : type;
+
       const { data, error } = await supabase.functions.invoke('ai-recommendations', {
-        body: { habits: habitData, userCategory, analysisType: type },
+        body: { habits: habitData, userCategory, analysisType: apiType },
       });
 
       if (error) throw error;
@@ -65,10 +72,26 @@ export function AIRecommendations({ habits, userCategory }: AIRecommendationsPro
     }
   };
 
+  // Auto-fetch suggestions on initial load
+  useEffect(() => {
+    if (!hasFetchedInitial.current && habits.length > 0) {
+      hasFetchedInitial.current = true;
+      fetchAnalysis('suggestions');
+    }
+  }, [habits.length]);
+
+  // Auto-fetch suggestions when triggerCount changes (habit created/completed)
+  useEffect(() => {
+    if (triggerCount > lastTrigger.current && habits.length > 0) {
+      lastTrigger.current = triggerCount;
+      fetchAnalysis('suggestions');
+    }
+  }, [triggerCount, habits.length]);
+
   const tabs = [
-    { id: 'recommendations' as AnalysisType, label: 'Recommendations', icon: Target, description: 'Personalized action items' },
+    { id: 'suggestions' as AnalysisType, label: 'Suggestions', icon: Target, description: 'Smart tips for your habits' },
     { id: 'patterns' as AnalysisType, label: 'Patterns', icon: TrendingUp, description: 'Hidden correlations' },
-    { id: 'insights' as AnalysisType, label: 'Insights', icon: Brain, description: 'Deep analytics' },
+    { id: 'recommendations' as AnalysisType, label: 'Actions', icon: Brain, description: 'Personalized action items' },
     { id: 'coaching' as AnalysisType, label: 'Coaching', icon: MessageCircle, description: 'Personal guidance' },
   ];
 
@@ -132,7 +155,7 @@ export function AIRecommendations({ habits, userCategory }: AIRecommendationsPro
                 <div className="text-center py-8 border border-dashed border-border rounded-lg">
                   <tab.icon className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
                   <p className="text-muted-foreground text-sm">
-                    Click "Generate" to get {tab.label.toLowerCase()} from AI
+                    {tab.id === 'suggestions' ? 'Loading suggestions...' : `Click "Generate" to get ${tab.label.toLowerCase()} from AI`}
                   </p>
                 </div>
               )}
