@@ -30,10 +30,10 @@ serve(async (req) => {
   }
 
   try {
-    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
-    if (!MISTRAL_API_KEY) {
-      console.error("MISTRAL_API_KEY is not configured");
-      throw new Error("MISTRAL_API_KEY is not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      console.error("LOVABLE_API_KEY is not configured");
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     const { habits, userCategory, analysisType = 'recommendations' }: RequestBody = await req.json();
@@ -76,7 +76,7 @@ Analyze the data to identify:
 4. MOMENTUM INDICATORS: Signs of improvement or decline
 5. RISK FACTORS: Early warning signs for habit abandonment
 
-Provide structured analysis with specific data-driven insights. Use percentages and comparisons where relevant.`;
+Provide structured analysis with specific data-driven insights. Use percentages and comparisons where relevant. Be encouraging but honest.`;
         userPrompt = `Analyze my habit data for hidden patterns and correlations:\n\n${habitSummary}\n\n${metrics}\n\nProvide a detailed pattern analysis with specific insights and actionable observations.`;
         break;
 
@@ -90,7 +90,7 @@ Generate insights in these categories:
 4. COMPARATIVE INSIGHTS: How this compares to optimal habit formation
 5. OPPORTUNITY INSIGHTS: Untapped potential and quick wins
 
-Be specific, data-driven, and actionable. Format with clear headers and bullet points.`;
+Be specific, data-driven, and actionable. Format with clear headers and bullet points. Be supportive and motivating.`;
         userPrompt = `Generate deep analytical insights from my habit data:\n\n${habitSummary}\n\n${metrics}\n\nProvide comprehensive insights that go beyond surface-level observations.`;
         break;
 
@@ -108,12 +108,12 @@ Provide personalized coaching that includes:
 4. ACCOUNTABILITY FRAMEWORK: How to stay on track
 5. NEXT STEPS: Clear, immediate actions to take
 
-Make it feel like a real coaching session - personal, actionable, and motivating.`;
+Make it feel like a real coaching session - personal, actionable, and motivating. Use their actual habit names and data.`;
         userPrompt = `Provide personalized coaching based on my habit data:\n\n${habitSummary}\n\n${metrics}\n\nGive me a coaching session that addresses my specific situation and helps me level up.`;
         break;
 
       default: // recommendations
-        systemPrompt = `You are an expert habit coach and behavioral psychologist powered by advanced ML analysis. Analyze the user's habit data and provide personalized, actionable recommendations.
+        systemPrompt = `You are an expert habit coach and behavioral psychologist powered by advanced AI analysis. Analyze the user's habit data and provide personalized, actionable recommendations.
 
 The user is categorized as "${userCategory}":
 - "consistent": Completes most habits regularly (>80% completion rate) - focus on optimization and new challenges
@@ -127,32 +127,30 @@ Provide 4-6 specific, data-driven recommendations. Structure your response with:
 4. ⏰ TIMING OPTIMIZATION: When to do what for best results
 5. 🧠 MINDSET SHIFTS: Mental strategies for better consistency
 
-Be concise but impactful. Use the actual habit names and data in your recommendations.`;
-        userPrompt = `Here is my habit data:\n\n${habitSummary}\n\n${metrics}\n\nBased on this data and my "${userCategory}" status, provide specific ML-powered recommendations to improve my habit consistency.`;
+Be concise but impactful. Use the actual habit names and data in your recommendations. Be encouraging and supportive.`;
+        userPrompt = `Here is my habit data:\n\n${habitSummary}\n\n${metrics}\n\nBased on this data and my "${userCategory}" status, provide specific AI-powered recommendations to improve my habit consistency.`;
     }
 
-    console.log("Calling Mistral AI API...");
+    console.log("Calling Lovable AI Gateway...");
     
-    const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MISTRAL_API_KEY}`,
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "mistral-large-latest",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.7,
-        max_tokens: 1500,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Mistral API error:", response.status, errorText);
+      console.error("Lovable AI error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
@@ -160,14 +158,14 @@ Be concise but impactful. Use the actual habit names and data in your recommenda
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 401) {
-        return new Response(JSON.stringify({ error: "Invalid API key. Please check your Mistral API configuration." }), {
-          status: 401,
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "AI usage credits exhausted. Please add more credits." }), {
+          status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       
-      throw new Error(`Mistral API error: ${response.status} - ${errorText}`);
+      throw new Error(`Lovable AI error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();

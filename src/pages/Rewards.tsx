@@ -1,22 +1,27 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useRewards } from '@/hooks/useRewards';
 import { useHabits } from '@/hooks/useHabits';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { useRedeemableRewards } from '@/hooks/useRedeemableRewards';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, Trophy, Star, Lock, Sparkles, Zap } from 'lucide-react';
+import { Loader2, Trophy, Star, Lock, Sparkles, Zap, ShoppingBag, Check, Gift } from 'lucide-react';
 import { XP_PER_LEVEL, calculateXpProgress } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { AppLayout } from '@/components/AppLayout';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function Rewards() {
   const { user, loading: authLoading } = useAuth();
   const { rewards, achievements, userAchievements, loading: rewardsLoading, checkAndUnlockAchievements } = useRewards();
   const { habits, loading: habitsLoading, allLogs } = useHabits();
   const { overallStats } = useAnalytics(habits, allLogs);
+  const { redeemableRewards, redeemedRewards, loading: shopLoading, redeemReward } = useRedeemableRewards();
+  const [redeeming, setRedeeming] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,7 +41,13 @@ export default function Rewards() {
     }
   }, [habits, overallStats, habitsLoading]);
 
-  if (authLoading || rewardsLoading || habitsLoading) {
+  const handleRedeem = async (rewardId: string) => {
+    setRedeeming(rewardId);
+    await redeemReward(rewardId);
+    setRedeeming(null);
+  };
+
+  if (authLoading || rewardsLoading || habitsLoading || shopLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -48,6 +59,21 @@ export default function Rewards() {
 
   const xpProgress = calculateXpProgress(rewards.xp_points);
   const unlockedIds = userAchievements.map(ua => ua.achievement_id);
+  const redeemedIds = redeemedRewards.map(r => r.reward_id);
+
+  // Group redeemable rewards by type
+  const rewardsByType = redeemableRewards.reduce((acc, reward) => {
+    if (!acc[reward.reward_type]) acc[reward.reward_type] = [];
+    acc[reward.reward_type].push(reward);
+    return acc;
+  }, {} as Record<string, typeof redeemableRewards>);
+
+  const typeLabels: Record<string, { label: string; icon: string }> = {
+    badge: { label: 'Badges', icon: '🏅' },
+    title: { label: 'Titles', icon: '👑' },
+    boost: { label: 'Boosts', icon: '⚡' },
+    theme: { label: 'Themes', icon: '🎨' },
+  };
 
   return (
     <AppLayout>
@@ -123,56 +149,152 @@ export default function Rewards() {
           </Card>
         </div>
 
-        {/* Achievements */}
-        <div>
-          <h2 className="text-xl font-display font-bold mb-4">Achievements</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {achievements.map((achievement, index) => {
-              const isUnlocked = unlockedIds.includes(achievement.id);
-              const userAchievement = userAchievements.find(ua => ua.achievement_id === achievement.id);
+        {/* Tabs for Achievements and Reward Shop */}
+        <Tabs defaultValue="shop" className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="shop" className="flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4" />
+              Reward Shop
+            </TabsTrigger>
+            <TabsTrigger value="achievements" className="flex items-center gap-2">
+              <Trophy className="w-4 h-4" />
+              Achievements
+            </TabsTrigger>
+          </TabsList>
 
-              return (
-                <Card 
-                  key={achievement.id} 
-                  variant={isUnlocked ? "elevated" : "outlined"}
-                  className={cn(
-                    "animate-fade-in transition-all",
-                    isUnlocked ? "border-accent/50" : "opacity-60"
-                  )}
-                  style={{ animationDelay: `${index * 0.05}s` }}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      <div className={cn(
-                        "w-14 h-14 rounded-xl flex items-center justify-center text-3xl",
-                        isUnlocked ? "bg-accent/20" : "bg-muted"
-                      )}>
-                        {isUnlocked ? achievement.icon : <Lock className="w-6 h-6 text-muted-foreground" />}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{achievement.name}</h3>
-                          {isUnlocked && <Sparkles className="w-4 h-4 text-accent" />}
+          {/* Reward Shop Tab */}
+          <TabsContent value="shop" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-display font-bold">Reward Shop</h2>
+                <p className="text-sm text-muted-foreground">Spend your hard-earned XP on rewards!</p>
+              </div>
+              <div className="flex items-center gap-2 bg-accent/20 px-4 py-2 rounded-full">
+                <Sparkles className="w-4 h-4 text-accent" />
+                <span className="font-bold">{rewards.xp_points} XP</span>
+              </div>
+            </div>
+
+            {Object.entries(rewardsByType).map(([type, typeRewards]) => (
+              <div key={type} className="space-y-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <span>{typeLabels[type]?.icon || '🎁'}</span>
+                  {typeLabels[type]?.label || type}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {typeRewards.map((reward, index) => {
+                    const isRedeemed = redeemedIds.includes(reward.id);
+                    const canAfford = rewards.xp_points >= reward.xp_cost;
+
+                    return (
+                      <Card 
+                        key={reward.id}
+                        variant={isRedeemed ? "elevated" : "outlined"}
+                        className={cn(
+                          "animate-fade-in transition-all",
+                          isRedeemed && "border-accent/50 bg-accent/5"
+                        )}
+                        style={{ animationDelay: `${index * 0.05}s` }}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-4">
+                            <div className={cn(
+                              "w-14 h-14 rounded-xl flex items-center justify-center text-3xl",
+                              isRedeemed ? "bg-accent/20" : "bg-muted"
+                            )}>
+                              {reward.icon}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold">{reward.name}</h4>
+                                {isRedeemed && <Check className="w-4 h-4 text-accent" />}
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-3">{reward.description}</p>
+                              
+                              {isRedeemed ? (
+                                <span className="text-xs bg-accent/20 text-accent px-2 py-1 rounded-full">
+                                  Owned
+                                </span>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant={canAfford ? "default" : "outline"}
+                                  disabled={!canAfford || redeeming === reward.id}
+                                  onClick={() => handleRedeem(reward.id)}
+                                  className="w-full"
+                                >
+                                  {redeeming === reward.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Gift className="w-4 h-4 mr-2" />
+                                      {reward.xp_cost} XP
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </TabsContent>
+
+          {/* Achievements Tab */}
+          <TabsContent value="achievements" className="space-y-4">
+            <h2 className="text-xl font-display font-bold">Achievements</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {achievements.map((achievement, index) => {
+                const isUnlocked = unlockedIds.includes(achievement.id);
+                const userAchievement = userAchievements.find(ua => ua.achievement_id === achievement.id);
+
+                return (
+                  <Card 
+                    key={achievement.id} 
+                    variant={isUnlocked ? "elevated" : "outlined"}
+                    className={cn(
+                      "animate-fade-in transition-all",
+                      isUnlocked ? "border-accent/50" : "opacity-60"
+                    )}
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <div className={cn(
+                          "w-14 h-14 rounded-xl flex items-center justify-center text-3xl",
+                          isUnlocked ? "bg-accent/20" : "bg-muted"
+                        )}>
+                          {isUnlocked ? achievement.icon : <Lock className="w-6 h-6 text-muted-foreground" />}
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2">{achievement.description}</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                            +{achievement.xp_reward} XP
-                          </span>
-                          {isUnlocked && userAchievement && (
-                            <span className="text-xs text-muted-foreground">
-                              {format(new Date(userAchievement.unlocked_at), 'MMM d, yyyy')}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold">{achievement.name}</h3>
+                            {isUnlocked && <Sparkles className="w-4 h-4 text-accent" />}
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">{achievement.description}</p>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                              +{achievement.xp_reward} XP
                             </span>
-                          )}
+                            {isUnlocked && userAchievement && (
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(userAchievement.unlocked_at), 'MMM d, yyyy')}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </TabsContent>
+        </Tabs>
 
         {/* XP Earning Guide */}
         <Card variant="glass" className="animate-fade-in">
