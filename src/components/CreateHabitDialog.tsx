@@ -13,9 +13,10 @@ import { Loader2, Bell, Clock } from 'lucide-react';
 interface CreateHabitDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onHabitCreated?: () => void;
 }
 
-export function CreateHabitDialog({ open, onOpenChange }: CreateHabitDialogProps) {
+export function CreateHabitDialog({ open, onOpenChange, onHabitCreated }: CreateHabitDialogProps) {
   const { createHabit } = useHabits();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<HabitCategory>('health');
@@ -42,6 +43,7 @@ export function CreateHabitDialog({ open, onOpenChange }: CreateHabitDialogProps
       setReminderEnabled(false);
       setReminderTime('09:00');
       onOpenChange(false);
+      onHabitCreated?.();
     } catch (err) {
       toast.error('Failed to create habit');
     } finally {
