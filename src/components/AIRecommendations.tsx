@@ -84,7 +84,7 @@ export function AIRecommendations({ habits, userCategory }: AIRecommendationsPro
             </div>
             <div>
               <CardTitle className="font-display">AI Coach</CardTitle>
-              <p className="text-xs text-muted-foreground">Powered by Mistral AI</p>
+              <p className="text-xs text-muted-foreground">Powered by Lovable AI</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
