@@ -1,8 +1,9 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HabitWithStats, CATEGORY_CONFIG } from '@/lib/types';
-import { Check, Flame, Trash2 } from 'lucide-react';
+import { Check, Flame, Trash2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
 
 interface HabitCardProps {
   habit: HabitWithStats;
@@ -11,13 +12,57 @@ interface HabitCardProps {
   style?: React.CSSProperties;
 }
 
+function getTimeRemaining(reminderTime: string | null): { hours: number; minutes: number; isPast: boolean } | null {
+  if (!reminderTime) return null;
+  
+  const now = new Date();
+  const [hours, minutes] = reminderTime.split(':').map(Number);
+  
+  const targetTime = new Date();
+  targetTime.setHours(hours, minutes, 0, 0);
+  
+  const diff = targetTime.getTime() - now.getTime();
+  const isPast = diff < 0;
+  const absDiff = Math.abs(diff);
+  
+  const hoursRemaining = Math.floor(absDiff / (1000 * 60 * 60));
+  const minutesRemaining = Math.floor((absDiff % (1000 * 60 * 60)) / (1000 * 60));
+  
+  return { hours: hoursRemaining, minutes: minutesRemaining, isPast };
+}
+
 export function HabitCard({ habit, onToggle, onDelete, style }: HabitCardProps) {
   const categoryConfig = CATEGORY_CONFIG[habit.category];
+  const [timeRemaining, setTimeRemaining] = useState<{ hours: number; minutes: number; isPast: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!habit.reminder_time || habit.completedToday) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const updateTime = () => {
+      setTimeRemaining(getTimeRemaining(habit.reminder_time));
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [habit.reminder_time, habit.completedToday]);
+
+  const isBehind = timeRemaining?.isPast && !habit.completedToday;
+  const isUrgent = timeRemaining && !timeRemaining.isPast && timeRemaining.hours === 0 && timeRemaining.minutes <= 30 && !habit.completedToday;
 
   return (
     <Card 
       variant="elevated" 
-      className={cn("animate-fade-in overflow-hidden", habit.completedToday && "ring-2 ring-primary/50")}
+      className={cn(
+        "animate-fade-in overflow-hidden", 
+        habit.completedToday && "ring-2 ring-primary/50",
+        isBehind && "ring-2 ring-destructive/50 bg-destructive/5",
+        isUrgent && "ring-2 ring-warning/50 bg-warning/5"
+      )}
       style={style}
     >
       <CardContent className="p-5">
@@ -38,6 +83,34 @@ export function HabitCard({ habit, onToggle, onDelete, style }: HabitCardProps) 
             <Check className="w-4 h-4" />
           </Button>
         </div>
+
+        {/* Time remaining indicator */}
+        {timeRemaining && !habit.completedToday && (
+          <div className={cn(
+            "flex items-center gap-2 text-xs mb-3 p-2 rounded-lg",
+            isBehind && "bg-destructive/10 text-destructive",
+            isUrgent && !isBehind && "bg-warning/10 text-warning",
+            !isBehind && !isUrgent && "bg-muted text-muted-foreground"
+          )}>
+            <Clock className="w-3.5 h-3.5" />
+            {isBehind ? (
+              <span className="font-medium">
+                {timeRemaining.hours > 0 ? `${timeRemaining.hours}h ` : ''}{timeRemaining.minutes}m overdue
+              </span>
+            ) : (
+              <span>
+                {timeRemaining.hours > 0 ? `${timeRemaining.hours}h ` : ''}{timeRemaining.minutes}m remaining
+              </span>
+            )}
+          </div>
+        )}
+
+        {habit.completedToday && habit.reminder_time && (
+          <div className="flex items-center gap-2 text-xs mb-3 p-2 rounded-lg bg-primary/10 text-primary">
+            <Check className="w-3.5 h-3.5" />
+            <span className="font-medium">Completed on time!</span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-1 text-accent">

@@ -10,6 +10,7 @@ import { CreateHabitDialog } from '@/components/CreateHabitDialog';
 import { AIRecommendations } from '@/components/AIRecommendations';
 import { AppLayout } from '@/components/AppLayout';
 import { useNotifications } from '@/hooks/useNotifications';
+import { BehindScheduleAlert } from '@/components/BehindScheduleAlert';
 import { toast } from 'sonner';
 
 export default function Index() {
@@ -185,6 +186,12 @@ export default function Index() {
         open={createDialogOpen} 
         onOpenChange={setCreateDialogOpen} 
         onHabitCreated={handleHabitCreated}
+      />
+
+      {/* Behind Schedule Alert */}
+      <BehindScheduleAlert 
+        habits={habits} 
+        onDismiss={() => {}} 
       />
     </AppLayout>
   );
