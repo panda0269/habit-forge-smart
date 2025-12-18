@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useHabits } from '@/hooks/useHabits';
+import { useNotifications } from '@/hooks/useNotifications';
 import { HabitCategory, HabitFrequency, CATEGORY_CONFIG, FREQUENCY_CONFIG } from '@/lib/types';
 import { toast } from 'sonner';
 import { Loader2, Bell, Clock } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface CreateHabitDialogProps {
   open: boolean;
@@ -17,7 +19,8 @@ interface CreateHabitDialogProps {
 }
 
 export function CreateHabitDialog({ open, onOpenChange, onHabitCreated }: CreateHabitDialogProps) {
-  const { createHabit } = useHabits();
+  const { user } = useAuth();
+  const { permission, requestPermission } = useNotifications();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<HabitCategory>('health');
   const [frequency, setFrequency] = useState<HabitFrequency>('daily');
@@ -25,26 +28,47 @@ export function CreateHabitDialog({ open, onOpenChange, onHabitCreated }: Create
   const [reminderTime, setReminderTime] = useState('09:00');
   const [loading, setLoading] = useState(false);
 
+  const handleReminderToggle = async (enabled: boolean) => {
+    if (enabled && permission !== 'granted') {
+      const granted = await requestPermission();
+      if (!granted) {
+        return;
+      }
+    }
+    setReminderEnabled(enabled);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !user) return;
 
     setLoading(true);
     try {
-      await createHabit({ 
-        title: title.trim(), 
-        category, 
-        frequency,
-        reminder_enabled: reminderEnabled,
-        reminder_time: reminderEnabled ? reminderTime : null,
-      });
+      // Create habit directly using supabase client
+      const { error } = await supabase
+        .from('habits')
+        .insert({
+          user_id: user.id,
+          title: title.trim(),
+          category,
+          frequency,
+          color: '#10B981',
+          reminder_enabled: reminderEnabled,
+          reminder_time: reminderEnabled ? reminderTime : null,
+        });
+
+      if (error) throw error;
+      
       toast.success('Habit created!');
       setTitle('');
       setReminderEnabled(false);
       setReminderTime('09:00');
       onOpenChange(false);
+      
+      // Trigger refresh and AI update in parent
       onHabitCreated?.();
     } catch (err) {
+      console.error('Failed to create habit:', err);
       toast.error('Failed to create habit');
     } finally {
       setLoading(false);
@@ -115,7 +139,7 @@ export function CreateHabitDialog({ open, onOpenChange, onHabitCreated }: Create
               <Switch
                 id="reminder"
                 checked={reminderEnabled}
-                onCheckedChange={setReminderEnabled}
+                onCheckedChange={handleReminderToggle}
               />
             </div>
 
@@ -131,6 +155,12 @@ export function CreateHabitDialog({ open, onOpenChange, onHabitCreated }: Create
                   className="w-auto ml-auto"
                 />
               </div>
+            )}
+            
+            {permission === 'denied' && (
+              <p className="text-xs text-destructive">
+                Notifications are blocked. Please enable them in your browser settings.
+              </p>
             )}
           </div>
 

@@ -4,16 +4,17 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { HabitWithStats, UserCategory } from '@/lib/types';
-import { Sparkles, Loader2, RefreshCw, Brain, TrendingUp, Target, MessageCircle } from 'lucide-react';
+import { Sparkles, Loader2, RefreshCw, Brain, TrendingUp, Target, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
+import { HabitChatbot } from './HabitChatbot';
 
 interface AIRecommendationsProps {
   habits: HabitWithStats[];
   userCategory: UserCategory;
-  triggerCount?: number; // Increments when habit is created or toggled
+  triggerCount?: number;
 }
 
-type AnalysisType = 'suggestions' | 'patterns' | 'recommendations' | 'coaching';
+type AnalysisType = 'suggestions' | 'patterns' | 'recommendations' | 'chat';
 
 interface AnalysisResult {
   content: string;
@@ -21,18 +22,19 @@ interface AnalysisResult {
 }
 
 export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AIRecommendationsProps) {
-  const [analyses, setAnalyses] = useState<Record<AnalysisType, AnalysisResult | null>>({
+  const [analyses, setAnalyses] = useState<Record<string, AnalysisResult | null>>({
     suggestions: null,
     patterns: null,
     recommendations: null,
-    coaching: null,
   });
-  const [loading, setLoading] = useState<AnalysisType | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AnalysisType>('suggestions');
   const lastTrigger = useRef(triggerCount);
   const hasFetchedInitial = useRef(false);
 
-  const fetchAnalysis = async (type: AnalysisType) => {
+  const fetchAnalysis = async (type: string) => {
+    if (type === 'chat') return; // Chat is handled separately
+    
     setLoading(type);
     try {
       const habitData = habits.map(h => ({
@@ -48,7 +50,6 @@ export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AI
         completedToday: h.completedToday,
       }));
 
-      // Map suggestions to 'recommendations' for the edge function
       const apiType = type === 'suggestions' ? 'recommendations' : type;
 
       const { data, error } = await supabase.functions.invoke('ai-recommendations', {
@@ -80,7 +81,7 @@ export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AI
     }
   }, [habits.length]);
 
-  // Auto-fetch suggestions when triggerCount changes (habit created/completed)
+  // Auto-fetch suggestions when triggerCount changes
   useEffect(() => {
     if (triggerCount > lastTrigger.current && habits.length > 0) {
       lastTrigger.current = triggerCount;
@@ -92,10 +93,8 @@ export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AI
     { id: 'suggestions' as AnalysisType, label: 'Suggestions', icon: Target, description: 'Smart tips for your habits' },
     { id: 'patterns' as AnalysisType, label: 'Patterns', icon: TrendingUp, description: 'Hidden correlations' },
     { id: 'recommendations' as AnalysisType, label: 'Actions', icon: Brain, description: 'Personalized action items' },
-    { id: 'coaching' as AnalysisType, label: 'Coaching', icon: MessageCircle, description: 'Personal guidance' },
+    { id: 'chat' as AnalysisType, label: 'Chat', icon: MessageSquare, description: 'Ask your habit coach' },
   ];
-
-  const currentAnalysis = analyses[activeTab];
 
   return (
     <Card variant="elevated" className="animate-fade-in">
@@ -134,50 +133,56 @@ export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AI
 
           {tabs.map(tab => (
             <TabsContent key={tab.id} value={tab.id} className="mt-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-muted-foreground">{tab.description}</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => fetchAnalysis(tab.id)} 
-                  disabled={loading === tab.id}
-                >
-                  {loading === tab.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
-                  {analyses[tab.id] ? 'Refresh' : 'Generate'}
-                </Button>
-              </div>
-
-              {!analyses[tab.id] && loading !== tab.id && (
-                <div className="text-center py-8 border border-dashed border-border rounded-lg">
-                  <tab.icon className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground text-sm">
-                    {tab.id === 'suggestions' ? 'Loading suggestions...' : `Click "Generate" to get ${tab.label.toLowerCase()} from AI`}
-                  </p>
-                </div>
-              )}
-
-              {loading === tab.id && (
-                <div className="flex flex-col items-center justify-center py-8 border border-dashed border-border rounded-lg">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-                  <p className="text-muted-foreground text-sm">Analyzing your habits...</p>
-                </div>
-              )}
-
-              {analyses[tab.id] && loading !== tab.id && (
-                <div className="space-y-3">
-                  <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {analyses[tab.id]?.content}
-                    </div>
+              {tab.id === 'chat' ? (
+                <HabitChatbot habits={habits} userCategory={userCategory} />
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm text-muted-foreground">{tab.description}</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => fetchAnalysis(tab.id)} 
+                      disabled={loading === tab.id}
+                    >
+                      {loading === tab.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      {analyses[tab.id] ? 'Refresh' : 'Generate'}
+                    </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Generated {analyses[tab.id]?.timestamp.toLocaleTimeString()}
-                  </p>
-                </div>
+
+                  {!analyses[tab.id] && loading !== tab.id && (
+                    <div className="text-center py-8 border border-dashed border-border rounded-lg">
+                      <tab.icon className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-muted-foreground text-sm">
+                        {tab.id === 'suggestions' ? 'Loading suggestions...' : `Click "Generate" to get ${tab.label.toLowerCase()} from AI`}
+                      </p>
+                    </div>
+                  )}
+
+                  {loading === tab.id && (
+                    <div className="flex flex-col items-center justify-center py-8 border border-dashed border-border rounded-lg">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+                      <p className="text-muted-foreground text-sm">Analyzing your habits...</p>
+                    </div>
+                  )}
+
+                  {analyses[tab.id] && loading !== tab.id && (
+                    <div className="space-y-3">
+                      <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                          {analyses[tab.id]?.content}
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Generated {analyses[tab.id]?.timestamp.toLocaleTimeString()}
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </TabsContent>
           ))}

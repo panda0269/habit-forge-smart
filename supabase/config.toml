@@ -2,3 +2,6 @@ project_id = "bbxtttigsybxwjrtxasx"
 
 [functions.ai-recommendations]
 verify_jwt = false
+
+[functions.habit-chat]
+verify_jwt = false
