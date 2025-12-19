@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.habit-chat]
 verify_jwt = false
+
+[functions.habit-automation]
+verify_jwt = false

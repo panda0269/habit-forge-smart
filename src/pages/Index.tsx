@@ -11,6 +11,7 @@ import { AIRecommendations } from '@/components/AIRecommendations';
 import { AppLayout } from '@/components/AppLayout';
 import { useNotifications } from '@/hooks/useNotifications';
 import { BehindScheduleAlert } from '@/components/BehindScheduleAlert';
+import { HabitAutomationPanel } from '@/components/HabitAutomationPanel';
 import { toast } from 'sonner';
 
 export default function Index() {
@@ -171,6 +172,17 @@ export default function Index() {
             </div>
           )}
         </section>
+
+        {/* Habit Automation Panel */}
+        {habits.length > 0 && (
+          <section>
+            <h2 className="text-2xl font-display font-bold mb-4">🤖 Automation Engine</h2>
+            <HabitAutomationPanel 
+              habits={habits} 
+              userCategory={getUserCategory()} 
+            />
+          </section>
+        )}
 
         {/* AI Recommendations */}
         {habits.length > 0 && (
