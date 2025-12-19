@@ -12,11 +12,13 @@ import { AppLayout } from '@/components/AppLayout';
 import { useNotifications } from '@/hooks/useNotifications';
 import { BehindScheduleAlert } from '@/components/BehindScheduleAlert';
 import { HabitAutomationPanel } from '@/components/HabitAutomationPanel';
+import { HabitTemplates } from '@/components/HabitTemplates';
+import { HabitCategory, HabitFrequency } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function Index() {
   const { user, loading: authLoading } = useAuth();
-  const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, getUserCategory, refreshHabits, mergeHabits } = useHabits();
+  const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, getUserCategory, refreshHabits, mergeHabits, createHabit } = useHabits();
   const { scheduleHabitReminders, permission, requestPermission, testNotification, isSupported } = useNotifications();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [aiTriggerCount, setAiTriggerCount] = useState(0);
@@ -53,6 +55,29 @@ export default function Index() {
     toast.success(`Merged ${selectedHabitIds.length} habits into "${newHabitData.title}"`);
     setAiTriggerCount(prev => prev + 1);
   }, [mergeHabits]);
+
+  const handleAddTemplateHabits = useCallback(async (templateHabits: {
+    title: string;
+    description: string;
+    category: HabitCategory;
+    frequency: HabitFrequency;
+    color: string;
+    reminder_time: string | null;
+  }[]) => {
+    for (const habit of templateHabits) {
+      await createHabit({
+        title: habit.title,
+        description: habit.description,
+        category: habit.category,
+        frequency: habit.frequency,
+        color: habit.color,
+        reminder_enabled: !!habit.reminder_time,
+        reminder_time: habit.reminder_time,
+      });
+    }
+    toast.success(`Added ${templateHabits.length} habits from template!`);
+    setAiTriggerCount(prev => prev + 1);
+  }, [createHabit]);
 
   const handleEnableNotifications = async () => {
     const granted = await requestPermission();
@@ -158,15 +183,21 @@ export default function Index() {
           </div>
           
           {habits.length === 0 ? (
-            <Card variant="outlined" className="p-12 text-center">
-              <Sparkles className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No habits yet</h3>
-              <p className="text-muted-foreground mb-4">Start building better habits today!</p>
-              <Button variant="hero" onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="w-4 h-4" />
-                Create Your First Habit
-              </Button>
-            </Card>
+            <div className="space-y-6">
+              <Card variant="outlined" className="p-8 text-center">
+                <Sparkles className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No habits yet</h3>
+                <p className="text-muted-foreground mb-4">Start with a template pack or create your own habit!</p>
+                <Button variant="hero" onClick={() => setCreateDialogOpen(true)}>
+                  <Plus className="w-4 h-4" />
+                  Create Custom Habit
+                </Button>
+              </Card>
+              <HabitTemplates 
+                onAddHabits={handleAddTemplateHabits} 
+                existingHabitCount={habits.length}
+              />
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {habits.map((habit, index) => (
@@ -181,6 +212,14 @@ export default function Index() {
             </div>
           )}
         </section>
+
+        {/* Quick-Add Templates (when user has habits) */}
+        {habits.length > 0 && (
+          <HabitTemplates 
+            onAddHabits={handleAddTemplateHabits} 
+            existingHabitCount={habits.length}
+          />
+        )}
 
         {/* Habit Automation Panel */}
         {habits.length > 0 && (
