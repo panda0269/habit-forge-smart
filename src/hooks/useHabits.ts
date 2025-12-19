@@ -167,6 +167,54 @@ export function useHabits() {
     await fetchHabits();
   };
 
+  const mergeHabits = async (
+    habitIds: string[], 
+    newHabitData: { 
+      title: string; 
+      description: string; 
+      category: HabitCategory;
+    }
+  ) => {
+    if (!user) throw new Error('User not authenticated');
+    if (habitIds.length < 2) throw new Error('Need at least 2 habits to merge');
+
+    // Get the habits to merge for reference
+    const habitsToMerge = habits.filter(h => habitIds.includes(h.id));
+    
+    // Calculate best color from merged habits
+    const primaryHabit = habitsToMerge[0];
+    const color = primaryHabit?.color || '#10B981';
+
+    // Create the new merged habit
+    const { data: newHabit, error: createError } = await supabase
+      .from('habits')
+      .insert({
+        user_id: user.id,
+        title: newHabitData.title,
+        description: newHabitData.description || `Merged from: ${habitsToMerge.map(h => h.title).join(', ')}`,
+        category: newHabitData.category,
+        frequency: 'daily',
+        color,
+        reminder_enabled: habitsToMerge.some(h => h.reminder_enabled),
+        reminder_time: habitsToMerge.find(h => h.reminder_time)?.reminder_time || null,
+      })
+      .select()
+      .single();
+
+    if (createError) throw createError;
+
+    // Delete the old habits
+    const { error: deleteError } = await supabase
+      .from('habits')
+      .delete()
+      .in('id', habitIds);
+
+    if (deleteError) throw deleteError;
+
+    await fetchHabits();
+    return newHabit;
+  };
+
   const toggleHabitCompletion = async (habitId: string, date?: string) => {
     if (!user) throw new Error('User not authenticated');
     
@@ -227,6 +275,7 @@ export function useHabits() {
     createHabit,
     updateHabit,
     deleteHabit,
+    mergeHabits,
     toggleHabitCompletion,
     refreshHabits: fetchHabits,
     getUserCategory,

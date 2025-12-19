@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 
 export default function Index() {
   const { user, loading: authLoading } = useAuth();
-  const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, getUserCategory, refreshHabits } = useHabits();
+  const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, getUserCategory, refreshHabits, mergeHabits } = useHabits();
   const { scheduleHabitReminders, permission, requestPermission, testNotification, isSupported } = useNotifications();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [aiTriggerCount, setAiTriggerCount] = useState(0);
@@ -44,6 +44,15 @@ export default function Index() {
     await refreshHabits();
     setAiTriggerCount(prev => prev + 1);
   }, [refreshHabits]);
+
+  const handleMergeHabits = useCallback(async (
+    selectedHabitIds: string[], 
+    newHabitData: { title: string; description: string; category: any }
+  ) => {
+    await mergeHabits(selectedHabitIds, newHabitData);
+    toast.success(`Merged ${selectedHabitIds.length} habits into "${newHabitData.title}"`);
+    setAiTriggerCount(prev => prev + 1);
+  }, [mergeHabits]);
 
   const handleEnableNotifications = async () => {
     const granted = await requestPermission();
@@ -180,6 +189,7 @@ export default function Index() {
             <HabitAutomationPanel 
               habits={habits} 
               userCategory={getUserCategory()} 
+              onMergeHabits={handleMergeHabits}
             />
           </section>
         )}
