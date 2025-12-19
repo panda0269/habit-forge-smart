@@ -1,8 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { 
   Zap, 
   AlertTriangle, 
@@ -18,12 +17,18 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useHabitAutomation } from '@/hooks/useHabitAutomation';
-import { HabitWithStats, UserCategory } from '@/lib/types';
+import { HabitWithStats, UserCategory, HabitCategory } from '@/lib/types';
+import { MergeHabitsDialog } from '@/components/MergeHabitsDialog';
 import { cn } from '@/lib/utils';
 
 interface HabitAutomationPanelProps {
   habits: HabitWithStats[];
   userCategory: UserCategory;
+  onMergeHabits: (selectedHabitIds: string[], newHabitData: {
+    title: string;
+    description: string;
+    category: HabitCategory;
+  }) => Promise<void>;
 }
 
 const actionIcons: Record<string, React.ReactNode> = {
@@ -56,14 +61,30 @@ const decisionIcons: Record<string, React.ReactNode> = {
   MAINTAIN_COURSE: <CheckCircle2 className="w-5 h-5 text-primary" />
 };
 
-export function HabitAutomationPanel({ habits, userCategory }: HabitAutomationPanelProps) {
+export function HabitAutomationPanel({ habits, userCategory, onMergeHabits }: HabitAutomationPanelProps) {
   const { result, loading, runAutomation } = useHabitAutomation(habits, userCategory);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [suggestedMergeCategory, setSuggestedMergeCategory] = useState<string | undefined>();
 
   useEffect(() => {
     if (habits.length > 0) {
       runAutomation();
     }
   }, []);
+
+  const handleMergeClick = (category?: string) => {
+    setSuggestedMergeCategory(category);
+    setMergeDialogOpen(true);
+  };
+
+  const handleMerge = async (selectedHabitIds: string[], newHabitData: {
+    title: string;
+    description: string;
+    category: HabitCategory;
+  }) => {
+    await onMergeHabits(selectedHabitIds, newHabitData);
+    runAutomation(); // Refresh automation after merge
+  };
 
   if (habits.length === 0) return null;
 
@@ -88,6 +109,7 @@ export function HabitAutomationPanel({ habits, userCategory }: HabitAutomationPa
   if (!result) return null;
 
   const { autoUpdates, microHabit, systemDecision, insights } = result;
+  const hasMergeSuggestion = autoUpdates.some(u => u.action === 'merge');
 
   return (
     <div className="space-y-4">
@@ -197,12 +219,38 @@ export function HabitAutomationPanel({ habits, userCategory }: HabitAutomationPa
                         Suggested time: <strong>{update.suggestedTime}</strong>
                       </p>
                     )}
+                    {update.action === 'merge' && (
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="mt-2"
+                        onClick={() => handleMergeClick(update.habitTitle.replace(' habits', ''))}
+                      >
+                        <Merge className="w-3 h-3 mr-1" />
+                        Merge Now
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {/* Quick Merge Button */}
+      {habits.length >= 3 && (
+        <div className="flex justify-center">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => handleMergeClick()}
+            className="gap-2"
+          >
+            <Merge className="w-4 h-4" />
+            Merge Similar Habits
+          </Button>
+        </div>
       )}
 
       {/* Insights */}
@@ -237,6 +285,15 @@ export function HabitAutomationPanel({ habits, userCategory }: HabitAutomationPa
           Refresh Analysis
         </Button>
       </div>
+
+      {/* Merge Dialog */}
+      <MergeHabitsDialog
+        open={mergeDialogOpen}
+        onOpenChange={setMergeDialogOpen}
+        habits={habits}
+        suggestedCategory={suggestedMergeCategory}
+        onMerge={handleMerge}
+      />
     </div>
   );
 }
