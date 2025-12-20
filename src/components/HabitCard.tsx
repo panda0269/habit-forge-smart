@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HabitWithStats, CATEGORY_CONFIG } from '@/lib/types';
-import { Check, Flame, Trash2, Clock } from 'lucide-react';
+import { Check, Flame, Trash2, Clock, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 
@@ -9,6 +9,7 @@ interface HabitCardProps {
   habit: HabitWithStats;
   onToggle: () => void;
   onDelete: () => void;
+  onEdit: () => void;
   style?: React.CSSProperties;
 }
 
@@ -31,7 +32,7 @@ function getTimeRemaining(reminderTime: string | null): { hours: number; minutes
   return { hours: hoursRemaining, minutes: minutesRemaining, isPast };
 }
 
-export function HabitCard({ habit, onToggle, onDelete, style }: HabitCardProps) {
+export function HabitCard({ habit, onToggle, onDelete, onEdit, style }: HabitCardProps) {
   const categoryConfig = CATEGORY_CONFIG[habit.category];
   const [timeRemaining, setTimeRemaining] = useState<{ hours: number; minutes: number; isPast: boolean } | null>(null);
 
@@ -127,7 +128,10 @@ export function HabitCard({ habit, onToggle, onDelete, style }: HabitCardProps) 
           />
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end gap-1">
+          <Button variant="ghost" size="sm" onClick={onEdit} className="text-muted-foreground hover:text-primary">
+            <Pencil className="w-4 h-4" />
+          </Button>
           <Button variant="ghost" size="sm" onClick={onDelete} className="text-muted-foreground hover:text-destructive">
             <Trash2 className="w-4 h-4" />
           </Button>
