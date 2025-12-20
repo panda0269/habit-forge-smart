@@ -7,20 +7,23 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, Plus, Sparkles, Flame, Target, TrendingUp, Bell } from 'lucide-react';
 import { HabitCard } from '@/components/HabitCard';
 import { CreateHabitDialog } from '@/components/CreateHabitDialog';
+import { EditHabitDialog } from '@/components/EditHabitDialog';
 import { AIRecommendations } from '@/components/AIRecommendations';
 import { AppLayout } from '@/components/AppLayout';
 import { useNotifications } from '@/hooks/useNotifications';
 import { BehindScheduleAlert } from '@/components/BehindScheduleAlert';
 import { HabitAutomationPanel } from '@/components/HabitAutomationPanel';
 import { HabitTemplates } from '@/components/HabitTemplates';
-import { HabitCategory, HabitFrequency } from '@/lib/types';
+import { HabitCategory, HabitFrequency, HabitWithStats } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function Index() {
   const { user, loading: authLoading } = useAuth();
-  const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, getUserCategory, refreshHabits, mergeHabits, createHabit } = useHabits();
+  const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, updateHabit, getUserCategory, refreshHabits, mergeHabits, createHabit } = useHabits();
   const { scheduleHabitReminders, permission, requestPermission, testNotification, isSupported } = useNotifications();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedHabit, setSelectedHabit] = useState<HabitWithStats | null>(null);
   const [aiTriggerCount, setAiTriggerCount] = useState(0);
   const navigate = useNavigate();
 
@@ -78,6 +81,23 @@ export default function Index() {
     toast.success(`Added ${templateHabits.length} habits from template!`);
     setAiTriggerCount(prev => prev + 1);
   }, [createHabit]);
+
+  const handleEditHabit = useCallback((habit: HabitWithStats) => {
+    setSelectedHabit(habit);
+    setEditDialogOpen(true);
+  }, []);
+
+  const handleSaveHabit = useCallback(async (id: string, data: {
+    title: string;
+    description: string | null;
+    category: HabitCategory;
+    frequency: HabitFrequency;
+    reminder_enabled: boolean;
+    reminder_time: string | null;
+  }) => {
+    await updateHabit(id, data);
+    setAiTriggerCount(prev => prev + 1);
+  }, [updateHabit]);
 
   const handleEnableNotifications = async () => {
     const granted = await requestPermission();
@@ -206,6 +226,7 @@ export default function Index() {
                   habit={habit}
                   onToggle={() => handleToggleHabit(habit.id)}
                   onDelete={() => deleteHabit(habit.id)}
+                  onEdit={() => handleEditHabit(habit)}
                   style={{ animationDelay: `${index * 0.05}s` }}
                 />
               ))}
@@ -247,6 +268,13 @@ export default function Index() {
         open={createDialogOpen} 
         onOpenChange={setCreateDialogOpen} 
         onHabitCreated={handleHabitCreated}
+      />
+
+      <EditHabitDialog
+        habit={selectedHabit}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onSave={handleSaveHabit}
       />
 
       {/* Behind Schedule Alert */}

@@ -8,6 +8,7 @@ import Auth from "./pages/Auth";
 import Analytics from "./pages/Analytics";
 import Reports from "./pages/Reports";
 import Rewards from "./pages/Rewards";
+import WeeklyReview from "./pages/WeeklyReview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/rewards" element={<Rewards />} />
+          <Route path="/weekly-review" element={<WeeklyReview />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
