@@ -272,6 +272,39 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_reflections: {
+        Row: {
+          created_at: string
+          id: string
+          next_week_focus: string | null
+          updated_at: string
+          user_id: string
+          week_start: string
+          what_didnt_work: string | null
+          what_worked: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          next_week_focus?: string | null
+          updated_at?: string
+          user_id: string
+          week_start: string
+          what_didnt_work?: string | null
+          what_worked?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          next_week_focus?: string | null
+          updated_at?: string
+          user_id?: string
+          week_start?: string
+          what_didnt_work?: string | null
+          what_worked?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
