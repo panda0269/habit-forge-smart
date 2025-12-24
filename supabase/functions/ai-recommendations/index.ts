@@ -37,7 +37,74 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const { habits, userCategory, analysisType = 'recommendations' }: RequestBody = await req.json();
+    // Parse request body
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { habits, userCategory, analysisType = 'recommendations' } = body;
+
+    // Validate habits array
+    if (!Array.isArray(habits)) {
+      return new Response(JSON.stringify({ error: 'habits must be an array' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (habits.length === 0 || habits.length > 100) {
+      return new Response(JSON.stringify({ error: 'habits must contain 1-100 items' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate userCategory enum
+    const validCategories = ['consistent', 'improving', 'inconsistent'];
+    if (!validCategories.includes(userCategory)) {
+      return new Response(JSON.stringify({ error: 'userCategory must be consistent, improving, or inconsistent' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate analysisType enum
+    const validAnalysisTypes = ['recommendations', 'patterns', 'insights', 'coaching'];
+    if (!validAnalysisTypes.includes(analysisType)) {
+      return new Response(JSON.stringify({ error: 'analysisType must be recommendations, patterns, insights, or coaching' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate each habit structure
+    for (const habit of habits) {
+      if (!habit.id || typeof habit.id !== 'string') {
+        return new Response(JSON.stringify({ error: 'each habit must have a valid id' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!habit.title || typeof habit.title !== 'string' || habit.title.length > 500) {
+        return new Response(JSON.stringify({ error: 'each habit must have a valid title (max 500 chars)' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (typeof habit.completionRate !== 'number' || habit.completionRate < 0 || habit.completionRate > 100) {
+        return new Response(JSON.stringify({ error: 'each habit must have a valid completionRate (0-100)' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     console.log("Received request - habits:", habits.length, "userCategory:", userCategory, "analysisType:", analysisType);
 
     // Separate completed and missed habits

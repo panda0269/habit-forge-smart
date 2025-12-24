@@ -71,7 +71,80 @@ serve(async (req) => {
   }
 
   try {
-    const { habits, userCategory, currentTime, dayOfWeek }: AutomationRequest = await req.json();
+    // Parse request body
+    let body: AutomationRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { habits, userCategory, currentTime, dayOfWeek } = body;
+
+    // Validate habits array
+    if (!Array.isArray(habits)) {
+      return new Response(JSON.stringify({ error: 'habits must be an array' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (habits.length === 0 || habits.length > 100) {
+      return new Response(JSON.stringify({ error: 'habits must contain 1-100 items' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate userCategory enum
+    const validCategories = ['consistent', 'improving', 'inconsistent'];
+    if (!validCategories.includes(userCategory)) {
+      return new Response(JSON.stringify({ error: 'userCategory must be consistent, improving, or inconsistent' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate currentTime format (HH:MM)
+    if (typeof currentTime !== 'string' || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(currentTime)) {
+      return new Response(JSON.stringify({ error: 'currentTime must be in HH:MM format' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate dayOfWeek (0-6)
+    if (typeof dayOfWeek !== 'number' || dayOfWeek < 0 || dayOfWeek > 6 || !Number.isInteger(dayOfWeek)) {
+      return new Response(JSON.stringify({ error: 'dayOfWeek must be an integer from 0-6' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate each habit structure
+    for (const habit of habits) {
+      if (!habit.id || typeof habit.id !== 'string') {
+        return new Response(JSON.stringify({ error: 'each habit must have a valid id' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!habit.title || typeof habit.title !== 'string' || habit.title.length > 500) {
+        return new Response(JSON.stringify({ error: 'each habit must have a valid title (max 500 chars)' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!Array.isArray(habit.logs)) {
+        return new Response(JSON.stringify({ error: 'each habit must have a logs array' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
     
     console.log(`Automation engine started - ${habits.length} habits, category: ${userCategory}`);
 
