@@ -38,7 +38,99 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const { message, habitContext, conversationHistory, userCategory }: RequestBody = await req.json();
+    // Parse request body
+    let body: RequestBody;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { message, habitContext, conversationHistory, userCategory } = body;
+
+    // Validate message
+    if (typeof message !== 'string' || message.length === 0) {
+      return new Response(JSON.stringify({ error: 'message is required and must be a string' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (message.length > 5000) {
+      return new Response(JSON.stringify({ error: 'message must be 5000 characters or less' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate habitContext array
+    if (!Array.isArray(habitContext)) {
+      return new Response(JSON.stringify({ error: 'habitContext must be an array' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (habitContext.length > 100) {
+      return new Response(JSON.stringify({ error: 'habitContext must contain 100 or fewer items' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate conversationHistory array
+    if (!Array.isArray(conversationHistory)) {
+      return new Response(JSON.stringify({ error: 'conversationHistory must be an array' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (conversationHistory.length > 50) {
+      return new Response(JSON.stringify({ error: 'conversationHistory must contain 50 or fewer messages' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate each message in conversation history
+    for (const msg of conversationHistory) {
+      if (!msg.role || !['user', 'assistant'].includes(msg.role)) {
+        return new Response(JSON.stringify({ error: 'conversationHistory messages must have valid role' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (typeof msg.content !== 'string' || msg.content.length > 10000) {
+        return new Response(JSON.stringify({ error: 'conversationHistory messages must have valid content (max 10000 chars)' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Validate userCategory enum
+    const validCategories = ['consistent', 'improving', 'inconsistent'];
+    if (!validCategories.includes(userCategory)) {
+      return new Response(JSON.stringify({ error: 'userCategory must be consistent, improving, or inconsistent' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate habitContext items
+    for (const habit of habitContext) {
+      if (!habit.title || typeof habit.title !== 'string' || habit.title.length > 500) {
+        return new Response(JSON.stringify({ error: 'each habit must have a valid title (max 500 chars)' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     console.log("Chat request received - message:", message.substring(0, 50), "habits:", habitContext.length);
 
     // Build habit context summary
