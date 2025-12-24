@@ -1,10 +1,10 @@
 project_id = "bbxtttigsybxwjrtxasx"
 
 [functions.ai-recommendations]
-verify_jwt = false
+verify_jwt = true
 
 [functions.habit-chat]
-verify_jwt = false
+verify_jwt = true
 
 [functions.habit-automation]
-verify_jwt = false
+verify_jwt = true
