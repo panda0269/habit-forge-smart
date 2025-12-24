@@ -14,6 +14,7 @@ import { format, subDays, startOfWeek, endOfWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AppLayout } from '@/components/AppLayout';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function WeeklyReview() {
   const { user, loading: authLoading } = useAuth();
@@ -25,6 +26,13 @@ export default function WeeklyReview() {
   const [wins, setWins] = useState('');
   const [improvements, setImprovements] = useState('');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingReflection, setLoadingReflection] = useState(true);
+
+  // Calculate weekly stats
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -32,9 +40,37 @@ export default function WeeklyReview() {
     }
   }, [user, authLoading, navigate]);
 
-  // Calculate weekly stats
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
+  // Load existing reflection for this week
+  useEffect(() => {
+    const loadReflection = async () => {
+      if (!user) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('weekly_reflections')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('week_start', weekStartStr)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data) {
+          setWins(data.what_worked || '');
+          setImprovements(data.what_didnt_work || '');
+          setReflection(data.next_week_focus || '');
+        }
+      } catch (error) {
+        console.error('Error loading reflection:', error);
+      } finally {
+        setLoadingReflection(false);
+      }
+    };
+
+    if (user) {
+      loadReflection();
+    }
+  }, [user, weekStartStr]);
 
   const thisWeekLogs = allLogs.filter(log => {
     const logDate = new Date(log.completed_at);
@@ -68,20 +104,37 @@ export default function WeeklyReview() {
   const strugglingHabits = habitPerformance.filter(h => h.percentage < 50 && h.percentage > 0);
   const missedHabits = habitPerformance.filter(h => h.percentage === 0);
 
-  const handleSaveReflection = () => {
-    // In a real app, this would save to the database
-    localStorage.setItem(`weekly-review-${format(weekStart, 'yyyy-MM-dd')}`, JSON.stringify({
-      reflection,
-      wins,
-      improvements,
-      savedAt: new Date().toISOString(),
-    }));
-    setSaved(true);
-    toast.success('Reflection saved!');
-    setTimeout(() => setSaved(false), 2000);
+  const handleSaveReflection = async () => {
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('weekly_reflections')
+        .upsert({
+          user_id: user.id,
+          week_start: weekStartStr,
+          what_worked: wins,
+          what_didnt_work: improvements,
+          next_week_focus: reflection,
+        }, {
+          onConflict: 'user_id,week_start'
+        });
+
+      if (error) throw error;
+
+      setSaved(true);
+      toast.success('Reflection saved!');
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      console.error('Error saving reflection:', error);
+      toast.error('Failed to save reflection');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (authLoading || habitsLoading) {
+  if (authLoading || habitsLoading || loadingReflection) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -308,9 +361,14 @@ export default function WeeklyReview() {
               size="lg" 
               className="w-full" 
               onClick={handleSaveReflection}
-              disabled={saved}
+              disabled={saved || saving}
             >
-              {saved ? (
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : saved ? (
                 <>
                   <CheckCircle className="w-4 h-4" />
                   Saved!
