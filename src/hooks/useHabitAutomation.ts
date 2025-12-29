@@ -102,12 +102,11 @@ export function useHabitAutomation(habits: HabitWithStats[], userCategory: UserC
     }
   }, [habits, userCategory, lastRunTime]);
 
-  // Auto-run on mount and when habits change significantly
-  useEffect(() => {
-    if (habits.length > 0 && !result) {
-      runAutomation();
-    }
-  }, [habits.length]);
+  // Removed auto-run on mount - automation now only runs on meaningful events like:
+  // - habit completed
+  // - habit missed
+  // - streak breaks
+  // - weekly summary requested
 
   return {
     result,

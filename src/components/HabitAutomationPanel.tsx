@@ -66,11 +66,7 @@ export function HabitAutomationPanel({ habits, userCategory, onMergeHabits }: Ha
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [suggestedMergeCategory, setSuggestedMergeCategory] = useState<string | undefined>();
 
-  useEffect(() => {
-    if (habits.length > 0) {
-      runAutomation();
-    }
-  }, []);
+  // Removed auto-run on mount - automation now only runs on meaningful events
 
   const handleMergeClick = (category?: string) => {
     setSuggestedMergeCategory(category);

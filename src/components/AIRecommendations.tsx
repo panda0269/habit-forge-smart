@@ -73,17 +73,9 @@ export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AI
     }
   };
 
-  // Auto-fetch suggestions on initial load
+  // Only fetch suggestions when triggerCount changes (user action like completing/missing habit)
   useEffect(() => {
-    if (!hasFetchedInitial.current && habits.length > 0) {
-      hasFetchedInitial.current = true;
-      fetchAnalysis('suggestions');
-    }
-  }, [habits.length]);
-
-  // Auto-fetch suggestions when triggerCount changes
-  useEffect(() => {
-    if (triggerCount > lastTrigger.current && habits.length > 0) {
+    if (triggerCount > 0 && triggerCount > lastTrigger.current && habits.length > 0) {
       lastTrigger.current = triggerCount;
       fetchAnalysis('suggestions');
     }
@@ -158,7 +150,9 @@ export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AI
                     <div className="text-center py-8 border border-dashed border-border rounded-lg">
                       <tab.icon className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
                       <p className="text-muted-foreground text-sm">
-                        {tab.id === 'suggestions' ? 'Loading suggestions...' : `Click "Generate" to get ${tab.label.toLowerCase()} from AI`}
+                        {tab.id === 'suggestions' 
+                          ? 'Complete or miss a habit to get AI suggestions' 
+                          : `Click "Generate" to get ${tab.label.toLowerCase()} from AI`}
                       </p>
                     </div>
                   )}
