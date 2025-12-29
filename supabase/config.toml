@@ -8,3 +8,6 @@ verify_jwt = true
 
 [functions.habit-automation]
 verify_jwt = true
+
+[functions.ai-generate-image]
+verify_jwt = true
