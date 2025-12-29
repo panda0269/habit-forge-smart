@@ -31,6 +31,22 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // In-memory protections (best-effort): prevents runaway re-triggers from spamming the AI provider.
+  // Note: Edge instances can cold-start, so this isn't a perfect global limiter, but it stops most bursts.
+  const state = (globalThis as unknown as {
+    __aiRecommendationsState?: {
+      lastCallByUser: Record<string, number>;
+      cache: Record<string, { createdAt: number; payload: unknown }>;
+    };
+  }).__aiRecommendationsState ??
+    ((globalThis as unknown as { __aiRecommendationsState?: unknown }).__aiRecommendationsState = {
+      lastCallByUser: {},
+      cache: {},
+    }) as {
+      lastCallByUser: Record<string, number>;
+      cache: Record<string, { createdAt: number; payload: unknown }>;
+    };
+
   try {
     // Validate JWT authentication
     const authHeader = req.headers.get('Authorization');
@@ -45,7 +61,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
     });
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -57,12 +73,30 @@ serve(async (req) => {
       });
     }
 
+    // TEMP KILL SWITCH (set backend env AI_RECOMMENDATIONS_DISABLED=true to hard-disable without redeploy)
+    if ((Deno.env.get('AI_RECOMMENDATIONS_DISABLED') ?? '').toLowerCase() === 'true') {
+      return new Response(
+        JSON.stringify({
+          recommendations: 'AI temporarily disabled to prevent rate limits. Please try again later.',
+          analysisType: 'recommendations',
+          disabled: true,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     console.log("Authenticated user:", user.id);
 
     const OPENAI_API_KEY = Deno.env.get("samrt");
     if (!OPENAI_API_KEY) {
       console.error("OpenAI API key is not configured");
-      throw new Error("OpenAI API key is not configured");
+      // Always return 200 so the UI never blanks due to an unhandled error path.
+      return new Response(JSON.stringify({
+        recommendations: "AI is not configured yet. Please try again later.",
+        analysisType: 'recommendations',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Parse request body
@@ -133,6 +167,39 @@ serve(async (req) => {
       }
     }
 
+    // SERVER-SIDE THROTTLE (non-negotiable)
+    const now = Date.now();
+    const last = state.lastCallByUser[user.id] ?? 0;
+    const minIntervalMs = 10_000; // 10 seconds
+
+    // Simple context key; changes when habit state changes.
+    const habitsKey = habits
+      .map((h) => `${h.id}:${h.completedToday ? 1 : 0}:${h.currentStreak}:${h.missedDays}:${Math.round(h.completionRate)}`)
+      .sort()
+      .join('|');
+    const cacheKey = `${user.id}:${analysisType}:${userCategory}:${habitsKey}`;
+
+    // Serve cached response if present (even when throttled) to avoid repeated provider calls.
+    const cached = state.cache[cacheKey];
+    const cacheTtlMs = 5 * 60_000;
+    if (cached && now - cached.createdAt < cacheTtlMs) {
+      return new Response(JSON.stringify(cached.payload), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (now - last < minIntervalMs) {
+      console.warn(`ai-recommendations server-throttle user=${user.id} delta=${now - last}ms`);
+      return new Response(JSON.stringify({
+        recommendations: "Rate limited by server. Please wait a few seconds and try again.",
+        analysisType,
+        throttled: true,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    state.lastCallByUser[user.id] = now;
+
     console.log("Received request - habits:", habits.length, "userCategory:", userCategory, "analysisType:", analysisType);
 
     // Separate completed and missed habits
@@ -145,7 +212,7 @@ serve(async (req) => {
       const chronicStruggle = h.completionRate < 40;
       const recentSlip = h.completionRate >= 60 && !h.completedToday;
       const needsAttention = h.missedDays > h.totalDays * 0.4;
-      
+
       let status = '';
       if (chronicStruggle) status = '🔴 CHRONIC STRUGGLE';
       else if (streakJustBroken) status = '🔥 STREAK BROKEN';
@@ -159,17 +226,17 @@ serve(async (req) => {
         streakJustBroken,
         chronicStruggle,
         recentSlip,
-        needsAttention
+        needsAttention,
       };
     });
 
-    const habitSummary = habits.map(h => 
+    const habitSummary = habits.map(h =>
       `- ${h.title} (${h.category}): ${h.completedToday ? '✅ Done' : '❌ Not done'} | ${h.completionRate}% completion, ${h.currentStreak} day streak (best: ${h.longestStreak}), ${h.missedDays} missed/${h.totalDays} total days`
     ).join('\n');
 
     // Calculate advanced metrics
-    const avgCompletion = habits.length > 0 
-      ? Math.round(habits.reduce((sum, h) => sum + h.completionRate, 0) / habits.length) 
+    const avgCompletion = habits.length > 0
+      ? Math.round(habits.reduce((sum, h) => sum + h.completionRate, 0) / habits.length)
       : 0;
     const totalStreak = habits.reduce((sum, h) => sum + h.currentStreak, 0);
     const bestStreak = Math.max(...habits.map(h => h.longestStreak), 0);
@@ -192,7 +259,7 @@ TODAY'S STATUS:
 - Missed so far: ${missedToday.length} habits
 
 MISSED HABITS ANALYSIS:
-${missedHabitsAnalysis.length > 0 ? missedHabitsAnalysis.map(h => 
+${missedHabitsAnalysis.length > 0 ? missedHabitsAnalysis.map(h =>
   `• "${h.title}" (${h.category}, ${h.frequency})
    Status: ${h.status}
    Completion Rate: ${h.completionRate}%
@@ -204,7 +271,7 @@ ${missedHabitsAnalysis.length > 0 ? missedHabitsAnalysis.map(h =>
 ).join('\n\n') : 'All habits completed today! 🎉'}
 
 CATEGORY PERFORMANCE:
-${Object.entries(categoryBreakdown).map(([cat, data]) => 
+${Object.entries(categoryBreakdown).map(([cat, data]) =>
   `- ${cat}: ${data.completed}/${data.total} done today${data.missed.length > 0 ? ` (missing: ${data.missed.join(', ')})` : ''}`
 ).join('\n')}
 
@@ -261,7 +328,7 @@ Speak directly to the user ("you"). Be warm but actionable.`;
         userPrompt = `Coach me based on my habit data:\n\n${habitSummary}\n\n${metrics}\n\nGive me specific guidance for each missed habit and help me understand why I might be struggling with them.`;
         break;
 
-      default: // recommendations (suggestions)
+      default: // recommendations
         systemPrompt = `You are an expert habit coach providing real-time, contextual suggestions. Your role is to analyze habits that haven't been completed TODAY and provide specific, actionable advice.
 
 CRITICAL INSTRUCTIONS:
@@ -276,21 +343,20 @@ CRITICAL INSTRUCTIONS:
 
 User is "${userCategory}":
 - consistent (>80%): Optimize and prevent slips
-- improving (50-80%): Build momentum on struggling habits  
+- improving (50-80%): Build momentum on struggling habits
 - inconsistent (<50%): Focus on making habits easier and building small wins
 
 Format with clear sections:
-🎯 IMMEDIATE ACTIONS: What to do right now for missed habits
-💡 WHY YOU MIGHT BE STRUGGLING: Analysis of patterns
-🔧 ADJUSTMENTS TO CONSIDER: Ways to make struggling habits easier
-✨ WHAT'S WORKING: Acknowledge completed habits/good streaks`;
-        
+🎯 IMMEDIATE ACTIONS
+💡 WHY YOU MIGHT BE STRUGGLING
+🔧 ADJUSTMENTS TO CONSIDER
+✨ WHAT'S WORKING`;
         userPrompt = `Here is my habit data for today:\n\n${habitSummary}\n\n${metrics}\n\nProvide specific suggestions for my missed habits. For each one, tell me WHY I might have missed it and HOW I can complete it today. Be specific with habit names.`;
     }
 
     console.log("Calling OpenAI API with contextual analysis...");
     console.log("Missed habits:", missedToday.map(h => h.title));
-    
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -298,10 +364,12 @@ Format with clear sections:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4.1-mini",
+        max_tokens: 120,
+        temperature: 0.3,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
       }),
     });
@@ -309,29 +377,25 @@ Format with clear sections:
     if (!response.ok) {
       const errorText = await response.text();
       console.error("OpenAI API error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 401) {
-        return new Response(JSON.stringify({ error: "Invalid OpenAI API key." }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+
+      // Always return 200 to avoid blank screens; surface a safe message to the client.
+      const safe = {
+        recommendations: "You're doing okay. Let's try again a bit later.",
+        analysisType,
+        providerStatus: response.status,
+      };
+      state.cache[cacheKey] = { createdAt: now, payload: safe };
+      return new Response(JSON.stringify(safe), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const data = await response.json();
     const recommendations = data.choices?.[0]?.message?.content || "Unable to generate analysis at this time.";
-    
+
     console.log("Successfully generated", analysisType, "analysis");
 
-    return new Response(JSON.stringify({ 
+    const payload = {
       recommendations,
       analysisType,
       metrics: {
@@ -341,17 +405,27 @@ Format with clear sections:
         habitCount: habits.length,
         completedToday: completedToday.length,
         missedToday: missedToday.length,
-        userCategory
-      }
-    }), {
+        userCategory,
+      },
+    };
+
+    state.cache[cacheKey] = { createdAt: now, payload };
+
+    return new Response(JSON.stringify(payload), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
     console.error("Error in ai-recommendations function:", errorMessage);
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+    // Always return 200 with a safe fallback.
+    return new Response(JSON.stringify({
+      recommendations: "You're doing okay. Let's try again later.",
+      analysisType: 'recommendations',
+      error: errorMessage,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
+

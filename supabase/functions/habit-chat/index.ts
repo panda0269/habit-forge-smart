@@ -32,6 +32,15 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const state = (globalThis as unknown as {
+    __habitChatState?: {
+      lastCallByUser: Record<string, number>;
+    };
+  }).__habitChatState ??
+    ((globalThis as unknown as { __habitChatState?: unknown }).__habitChatState = {
+      lastCallByUser: {},
+    }) as { lastCallByUser: Record<string, number> };
+
   try {
     // Validate JWT authentication
     const authHeader = req.headers.get('Authorization');
@@ -46,7 +55,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
     });
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -58,12 +67,25 @@ serve(async (req) => {
       });
     }
 
+    if ((Deno.env.get('AI_CHAT_DISABLED') ?? '').toLowerCase() === 'true') {
+      return new Response(JSON.stringify({
+        reply: "Chat is temporarily disabled. Please try again later.",
+        disabled: true,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     console.log("Authenticated user:", user.id);
 
     const OPENAI_API_KEY = Deno.env.get("samrt");
     if (!OPENAI_API_KEY) {
       console.error("OpenAI API key is not configured");
-      throw new Error("OpenAI API key is not configured");
+      return new Response(JSON.stringify({
+        reply: "I'm not configured for chat yet. Please try again later.",
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Parse request body
@@ -78,6 +100,19 @@ serve(async (req) => {
     }
 
     const { message, habitContext, conversationHistory, userCategory } = body;
+
+    // Server-side throttle: avoid chat runaway
+    const now = Date.now();
+    const last = state.lastCallByUser[user.id] ?? 0;
+    if (now - last < 2_000) {
+      return new Response(JSON.stringify({
+        reply: "One sec — I'm getting too many requests. Please try again in a moment.",
+        throttled: true,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    state.lastCallByUser[user.id] = now;
 
     // Validate message
     if (typeof message !== 'string' || message.length === 0) {
@@ -162,7 +197,7 @@ serve(async (req) => {
     console.log("Chat request received - message:", message.substring(0, 50), "habits:", habitContext.length);
 
     // Build habit context summary
-    const habitSummary = habitContext.map(h => 
+    const habitSummary = habitContext.map(h =>
       `- ${h.title} (${h.category}): ${h.completedToday ? '✅ Done' : '❌ Not done'}, ${h.completionRate}% completion, ${h.currentStreak} day streak`
     ).join('\n');
 
@@ -185,32 +220,22 @@ USER CONTEXT:
 CURRENT HABITS:
 ${habitSummary || 'No habits created yet'}
 
-YOUR CAPABILITIES:
-1. Answer questions about habit building, motivation, and behavior change
-2. Provide specific advice for their existing habits
-3. Suggest new habits based on their goals
-4. Help troubleshoot why certain habits aren't sticking
-5. Share habit stacking and other proven techniques
-6. Offer encouragement and accountability
-
 GUIDELINES:
 - Reference their specific habits by name when relevant
 - If they ask about a missed habit, analyze why it might be difficult and suggest solutions
 - If they're doing well, acknowledge it but keep pushing for growth
 - Share scientific insights when helpful but keep it practical
-- Use emojis sparingly for warmth 🌟
 
 Remember: You're having a conversation, so be natural and responsive to what they actually asked.`;
 
-    // Build conversation with history
     const messages = [
       { role: "system", content: systemPrompt },
-      ...conversationHistory.slice(-10), // Keep last 10 messages for context
-      { role: "user", content: message }
+      ...conversationHistory.slice(-10),
+      { role: "user", content: message },
     ];
 
     console.log("Calling OpenAI API for chat response...");
-    
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -218,7 +243,9 @@ Remember: You're having a conversation, so be natural and responsive to what the
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4.1-mini",
+        max_tokens: 120,
+        temperature: 0.3,
         messages,
       }),
     });
@@ -226,26 +253,17 @@ Remember: You're having a conversation, so be natural and responsive to what the
     if (!response.ok) {
       const errorText = await response.text();
       console.error("OpenAI API error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 401) {
-        return new Response(JSON.stringify({ error: "Invalid OpenAI API key." }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      
-      throw new Error(`OpenAI API error: ${response.status}`);
+      return new Response(JSON.stringify({
+        reply: "I'm having trouble responding right now. Please try again in a bit.",
+        providerStatus: response.status,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content || "I'm having trouble responding right now. Please try again!";
-    
+
     console.log("Chat response generated successfully");
 
     return new Response(JSON.stringify({ reply }), {
@@ -254,9 +272,13 @@ Remember: You're having a conversation, so be natural and responsive to what the
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
     console.error("Error in habit-chat function:", errorMessage);
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Always return 200 with a safe fallback
+    return new Response(JSON.stringify({
+      reply: "I'm here with you — let's try again in a moment.",
+      error: errorMessage,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
+
