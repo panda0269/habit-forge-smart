@@ -78,9 +78,9 @@ serve(async (req) => {
 
     console.log("Authenticated user:", user.id);
 
-    const OPENAI_API_KEY = Deno.env.get("samrt");
-    if (!OPENAI_API_KEY) {
-      console.error("OpenAI API key is not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      console.error("LOVABLE_API_KEY is not configured");
       return new Response(JSON.stringify({
         reply: "I'm not configured for chat yet. Please try again later.",
       }), {
@@ -234,25 +234,23 @@ Remember: You're having a conversation, so be natural and responsive to what the
       { role: "user", content: message },
     ];
 
-    console.log("Calling OpenAI API for chat response...");
+    console.log("Calling Lovable AI for chat response...");
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        max_tokens: 120,
-        temperature: 0.3,
+        model: "google/gemini-2.5-flash",
         messages,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("OpenAI API error:", response.status, errorText);
+      console.error("Lovable AI error:", response.status, errorText);
       return new Response(JSON.stringify({
         reply: "I'm having trouble responding right now. Please try again in a bit.",
         providerStatus: response.status,
