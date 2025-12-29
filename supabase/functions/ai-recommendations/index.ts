@@ -285,72 +285,157 @@ OVERALL STATS:
 
     switch (analysisType) {
       case 'patterns':
-        systemPrompt = `You are an expert behavioral data analyst specializing in habit formation patterns. Your role is to identify hidden patterns, correlations, and trends in user habit data.
+        systemPrompt = `You are an expert behavioral data analyst specializing in habit formation patterns. Provide DETAILED, THOROUGH analysis with rich insights.
 
-Focus on:
-1. Which habits are consistently missed together (category correlations)
-2. What triggers streak breaks based on the data
-3. Patterns in completion vs missed habits
-4. Early warning signs visible in the data
+Your analysis MUST include these sections with headers:
 
-Be specific and reference actual habit names. Provide actionable pattern insights.`;
-        userPrompt = `Analyze my habit data for patterns:\n\n${habitSummary}\n\n${metrics}\n\nFocus especially on patterns in my missed habits and what might be causing them.`;
+✅ WHAT'S WORKING WELL
+- List specific habits that are performing well (name them!)
+- Explain WHY these habits are succeeding
+- Identify what makes these habits stick
+
+❌ WHAT'S NOT WORKING
+- List specific habits that are struggling (name them!)
+- Analyze the root causes of each struggle
+- Identify patterns in failures
+
+🔗 HIDDEN CORRELATIONS
+- Which habits tend to be missed together?
+- What category patterns do you see?
+- Time-based patterns if visible
+
+📊 DATA-DRIVEN INSIGHTS
+- Streak analysis and what breaks them
+- Completion rate trends
+- Category performance comparison
+
+🎯 KEY RECOMMENDATIONS
+- 3-5 specific, actionable changes based on the patterns
+
+Be thorough, specific, and reference actual habit names. Write at least 300 words.`;
+        userPrompt = `Analyze my habit data for patterns:\n\n${habitSummary}\n\n${metrics}\n\nProvide a comprehensive analysis with all the sections. Be detailed and specific.`;
         break;
 
       case 'insights':
-        systemPrompt = `You are an AI habit intelligence system providing deep analytical insights about habit behavior and psychology.
+        systemPrompt = `You are an AI habit intelligence system providing DEEP, COMPREHENSIVE analytical insights about habit behavior and psychology.
 
-Analyze:
-1. Why certain habits might be harder than others based on the data
-2. Psychological factors that might explain the patterns
-3. What the streak data reveals about consistency
-4. Predictions for habit success based on current trends
+Your analysis MUST include these sections:
 
-Be specific and use actual habit names from the data.`;
-        userPrompt = `Generate insights from my habit data:\n\n${habitSummary}\n\n${metrics}\n\nFocus on understanding WHY I might be missing certain habits.`;
+✅ WHAT'S WORKING WELL
+- Celebrate wins! Name specific habits that are thriving
+- Explain the psychology behind why these work
+- Identify strengths to leverage
+
+❌ WHAT'S NOT WORKING  
+- Be honest about struggles (name specific habits)
+- Psychological factors causing issues
+- Environmental or scheduling problems
+
+🧠 PSYCHOLOGICAL INSIGHTS
+- Why certain habits are harder based on the data
+- Motivation patterns you can see
+- Willpower and energy considerations
+
+📈 PERFORMANCE PREDICTIONS
+- Based on current trends, what will improve?
+- Which habits are at risk?
+- Recommended focus areas
+
+💡 BREAKTHROUGH OPPORTUNITIES
+- Low-hanging fruit for quick wins
+- Habits close to becoming automatic
+- Strategic priorities
+
+Be thorough and write at least 300 words. Use specific habit names.`;
+        userPrompt = `Generate comprehensive insights from my habit data:\n\n${habitSummary}\n\n${metrics}\n\nProvide deep analysis with all sections filled out. Be specific and thorough.`;
         break;
 
       case 'coaching':
-        systemPrompt = `You are a supportive personal habit coach. Your style adapts to the user's situation:
+        systemPrompt = `You are a supportive personal habit coach providing DETAILED, PERSONALIZED guidance. Your style adapts to the user's situation:
 ${userCategory === 'consistent' ? '- High performer: Challenge them to optimize and reach new heights' :
   userCategory === 'improving' ? '- Building momentum: Encourage consistency and celebrate progress' :
   '- Struggling: Be compassionate, focus on tiny wins and removing friction'}
 
-Your coaching MUST:
-1. Acknowledge completed habits first (celebrate wins)
-2. Address EACH missed habit specifically by name
-3. For each missed habit, analyze WHY it might have been skipped based on its data
-4. Provide a specific, actionable strategy for each struggling habit
-5. End with encouragement for the rest of the day
+Your coaching MUST include these sections:
 
-Speak directly to the user ("you"). Be warm but actionable.`;
-        userPrompt = `Coach me based on my habit data:\n\n${habitSummary}\n\n${metrics}\n\nGive me specific guidance for each missed habit and help me understand why I might be struggling with them.`;
+🏆 CELEBRATING YOUR WINS
+- List EVERY completed habit by name
+- Explain why each completion matters
+- Build confidence and momentum
+
+⚠️ HABITS NEEDING ATTENTION
+- Address EACH missed habit by name
+- Analyze WHY each was skipped
+- Provide specific recovery strategy
+
+✅ WHAT'S WORKING FOR YOU
+- Patterns in your successful habits
+- Strengths you're demonstrating
+- Momentum you're building
+
+❌ WHAT'S HOLDING YOU BACK
+- Honest assessment of challenges
+- Common failure patterns
+- Environmental or mindset issues
+
+🎯 YOUR ACTION PLAN
+- Specific steps for TODAY
+- Priority order for missed habits
+- Micro-actions to build momentum
+
+💪 ENCOURAGEMENT
+- Personalized motivation
+- Remind them of their progress
+- End on a high note
+
+Speak directly to the user ("you"). Be warm, detailed, and actionable. Write at least 350 words.`;
+        userPrompt = `Coach me based on my habit data:\n\n${habitSummary}\n\n${metrics}\n\nGive me comprehensive coaching with all sections. Be detailed and personal.`;
         break;
 
       default: // recommendations
-        systemPrompt = `You are an expert habit coach providing real-time, contextual suggestions. Your role is to analyze habits that haven't been completed TODAY and provide specific, actionable advice.
+        systemPrompt = `You are an expert habit coach providing COMPREHENSIVE, DETAILED suggestions. Provide rich, thorough analysis that helps the user understand their habits deeply.
 
-CRITICAL INSTRUCTIONS:
-1. Focus primarily on TODAY'S MISSED HABITS - these need immediate attention
-2. For EACH missed habit, analyze:
-   - Why it might have been skipped (based on completion rate, streak data, category)
-   - Whether it's a chronic struggle or unusual miss
-   - A specific strategy to complete it TODAY
-3. If a habit has low completion rate, suggest ways to make it easier or more achievable
-4. If a streak was just broken, acknowledge it and provide recovery strategy
-5. Look for category patterns (e.g., all fitness habits missed = possible energy issue)
+Your response MUST include ALL these sections with clear headers:
+
+✅ WHAT'S WORKING WELL
+- List specific habits that are succeeding (by name!)
+- Explain WHY these habits are working
+- Celebrate streaks and consistency
+- Identify patterns in successful habits
+
+❌ WHAT'S NOT WORKING
+- List specific habits that are struggling (by name!)
+- Analyze root causes for each
+- Identify common patterns in failures
+- Be honest but constructive
+
+🎯 IMMEDIATE ACTIONS FOR TODAY
+- For EACH missed habit, provide a specific action
+- Give time estimates and exact steps
+- Make actions small and achievable
+
+💡 WHY YOU MIGHT BE STRUGGLING
+- Analyze psychological factors
+- Consider energy, timing, environment
+- Look at category patterns
+
+🔧 STRATEGIC ADJUSTMENTS
+- Habit stacking opportunities
+- Environment design changes
+- Schedule optimization ideas
+
+📈 YOUR PROGRESS SNAPSHOT
+- Overall trajectory assessment
+- Comparison to previous performance
+- Momentum indicators
 
 User is "${userCategory}":
-- consistent (>80%): Optimize and prevent slips
-- improving (50-80%): Build momentum on struggling habits
-- inconsistent (<50%): Focus on making habits easier and building small wins
+- consistent (>80%): Optimize and prevent slips, aim for mastery
+- improving (50-80%): Build momentum, celebrate progress, identify weak spots  
+- inconsistent (<50%): Focus on tiny wins, reduce friction, build foundation
 
-Format with clear sections:
-🎯 IMMEDIATE ACTIONS
-💡 WHY YOU MIGHT BE STRUGGLING
-🔧 ADJUSTMENTS TO CONSIDER
-✨ WHAT'S WORKING`;
-        userPrompt = `Here is my habit data for today:\n\n${habitSummary}\n\n${metrics}\n\nProvide specific suggestions for my missed habits. For each one, tell me WHY I might have missed it and HOW I can complete it today. Be specific with habit names.`;
+Be thorough, specific, and encouraging. Write at least 400 words. Use actual habit names throughout.`;
+        userPrompt = `Here is my habit data for today:\n\n${habitSummary}\n\n${metrics}\n\nProvide comprehensive suggestions covering ALL sections. Be detailed, specific, and use my actual habit names. Give me thorough analysis of what's working and what's not.`;
     }
 
     console.log("Calling Gemini API with contextual analysis...");
