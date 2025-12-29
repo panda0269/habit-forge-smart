@@ -87,9 +87,9 @@ serve(async (req) => {
 
     console.log("Authenticated user:", user.id);
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("gem");
+    if (!GEMINI_API_KEY) {
+      console.error("Gemini API key (gem) is not configured");
       return new Response(JSON.stringify({
         recommendations: "AI is not configured yet. Please try again later.",
         analysisType: 'recommendations',
@@ -353,27 +353,24 @@ Format with clear sections:
         userPrompt = `Here is my habit data for today:\n\n${habitSummary}\n\n${metrics}\n\nProvide specific suggestions for my missed habits. For each one, tell me WHY I might have missed it and HOW I can complete it today. Be specific with habit names.`;
     }
 
-    console.log("Calling Lovable AI with contextual analysis...");
+    console.log("Calling Gemini API with contextual analysis...");
     console.log("Missed habits:", missedToday.map(h => h.title));
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+        contents: [
+          { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
         ],
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Lovable AI error:", response.status, errorText);
+      console.error("Gemini API error:", response.status, errorText);
 
       const safe = {
         recommendations: "You're doing okay. Let's try again a bit later.",
@@ -387,7 +384,7 @@ Format with clear sections:
     }
 
     const data = await response.json();
-    const recommendations = data.choices?.[0]?.message?.content || "Unable to generate analysis at this time.";
+    const recommendations = data.candidates?.[0]?.content?.parts?.[0]?.text || "Unable to generate analysis at this time.";
 
     console.log("Successfully generated", analysisType, "analysis");
 
