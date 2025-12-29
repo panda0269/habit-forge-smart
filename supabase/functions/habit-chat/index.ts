@@ -218,7 +218,7 @@ Remember: You're having a conversation, so be natural and responsive to what the
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages,
       }),
     });
