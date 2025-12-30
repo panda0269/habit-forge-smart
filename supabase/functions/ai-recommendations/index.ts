@@ -87,9 +87,9 @@ serve(async (req) => {
 
     console.log("Authenticated user:", user.id);
 
-    const GEMINI_API_KEY = Deno.env.get("gem");
-    if (!GEMINI_API_KEY) {
-      console.error("Gemini API key (gem) is not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      console.error("LOVABLE_API_KEY is not configured");
       return new Response(JSON.stringify({
         recommendations: "AI is not configured yet. Please try again later.",
         analysisType: 'recommendations',
@@ -438,24 +438,48 @@ Be thorough, specific, and encouraging. Write at least 400 words. Use actual hab
         userPrompt = `Here is my habit data for today:\n\n${habitSummary}\n\n${metrics}\n\nProvide comprehensive suggestions covering ALL sections. Be detailed, specific, and use my actual habit names. Give me thorough analysis of what's working and what's not.`;
     }
 
-    console.log("Calling Gemini API with contextual analysis...");
+    console.log("Calling Lovable AI Gateway with contextual analysis...");
     console.log("Missed habits:", missedToday.map(h => h.title));
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        contents: [
-          { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
         ],
+        max_tokens: 2500,
+        temperature: 0.7,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
+      console.error("Lovable AI Gateway error:", response.status, errorText);
+
+      if (response.status === 429) {
+        return new Response(JSON.stringify({
+          recommendations: "🔄 High demand right now! Please try again in a moment.",
+          analysisType,
+          throttled: true,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      if (response.status === 402) {
+        return new Response(JSON.stringify({
+          recommendations: "💳 AI service needs more credits. Please contact support.",
+          analysisType,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
       const safe = {
         recommendations: "You're doing okay. Let's try again a bit later.",
@@ -469,7 +493,7 @@ Be thorough, specific, and encouraging. Write at least 400 words. Use actual hab
     }
 
     const data = await response.json();
-    const recommendations = data.candidates?.[0]?.content?.parts?.[0]?.text || "Unable to generate analysis at this time.";
+    const recommendations = data.choices?.[0]?.message?.content || "Unable to generate analysis at this time.";
 
     console.log("Successfully generated", analysisType, "analysis");
 
