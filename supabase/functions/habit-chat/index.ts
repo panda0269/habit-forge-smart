@@ -78,9 +78,9 @@ serve(async (req) => {
 
     console.log("Authenticated user:", user.id);
 
-    const GEMINI_API_KEY = Deno.env.get("gem");
-    if (!GEMINI_API_KEY) {
-      console.error("Gemini API key (gem) is not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      console.error("LOVABLE_API_KEY is not configured");
       return new Response(JSON.stringify({
         reply: "I'm not configured for chat yet. Please try again later.",
       }), {
@@ -204,13 +204,14 @@ serve(async (req) => {
     const completedCount = habitContext.filter(h => h.completedToday).length;
     const missedHabits = habitContext.filter(h => !h.completedToday).map(h => h.title);
 
-    const systemPrompt = `You are a friendly and knowledgeable habit-building coach named Sage. You help users build better habits through conversation.
+    const systemPrompt = `You are Sage, a warm, supportive, and expert habit-building coach. You combine behavioral science expertise with genuine empathy.
 
 YOUR PERSONALITY:
-- Warm, supportive, and encouraging
-- Evidence-based but approachable
-- You celebrate wins and offer gentle guidance for struggles
-- You keep responses concise (2-4 paragraphs max unless detailed help is requested)
+- Warm, encouraging, and genuinely interested in the user's success
+- Evidence-based but accessible - you explain the "why" behind advice
+- You celebrate wins enthusiastically and offer compassionate guidance for struggles
+- You're conversational and natural, not robotic or clinical
+- You use emojis sparingly to add warmth
 
 USER CONTEXT:
 - Performance level: ${userCategory}
@@ -220,13 +221,19 @@ USER CONTEXT:
 CURRENT HABITS:
 ${habitSummary || 'No habits created yet'}
 
-GUIDELINES:
-- Reference their specific habits by name when relevant
-- If they ask about a missed habit, analyze why it might be difficult and suggest solutions
-- If they're doing well, acknowledge it but keep pushing for growth
-- Share scientific insights when helpful but keep it practical
+RESPONSE GUIDELINES:
+1. Reference their specific habits BY NAME when relevant
+2. Keep responses substantive but digestible (150-300 words typically)
+3. If they ask about a missed habit, provide:
+   - Empathy for the struggle
+   - Analysis of why it might be difficult
+   - 2-3 specific, actionable solutions
+4. If they're doing well, genuinely celebrate and suggest ways to maintain momentum
+5. Include scientific insights when helpful, but keep explanations practical
+6. Ask thoughtful follow-up questions to understand their situation better
+7. End with encouragement or a thought-provoking question
 
-Remember: You're having a conversation, so be natural and responsive to what they actually asked.`;
+Remember: You're having a real conversation with someone trying to improve their life. Be helpful, be specific, and be human.`;
 
     const messages = [
       { role: "system", content: systemPrompt },
@@ -234,27 +241,43 @@ Remember: You're having a conversation, so be natural and responsive to what the
       { role: "user", content: message },
     ];
 
-    console.log("Calling Gemini API for chat response...");
+    console.log("Calling Lovable AI Gateway for chat response...");
 
-    // Convert messages to Gemini format
-    const geminiContents = messages.map(msg => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
-    }));
-
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        contents: geminiContents,
+        model: "google/gemini-2.5-flash",
+        messages,
+        max_tokens: 1500,
+        temperature: 0.8,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
+      console.error("Lovable AI Gateway error:", response.status, errorText);
+      
+      if (response.status === 429) {
+        return new Response(JSON.stringify({
+          reply: "I'm getting a lot of questions right now! Give me a moment and try again. 🙏",
+          throttled: true,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      if (response.status === 402) {
+        return new Response(JSON.stringify({
+          reply: "My thinking cap needs a recharge! The AI service needs more credits. 💭",
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
       return new Response(JSON.stringify({
         reply: "I'm having trouble responding right now. Please try again in a bit.",
         providerStatus: response.status,
@@ -264,7 +287,7 @@ Remember: You're having a conversation, so be natural and responsive to what the
     }
 
     const data = await response.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm having trouble responding right now. Please try again!";
+    const reply = data.choices?.[0]?.message?.content || "I'm having trouble responding right now. Please try again!";
 
     console.log("Chat response generated successfully");
 
