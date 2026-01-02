@@ -16,6 +16,7 @@ import { BehindScheduleAlert } from '@/components/BehindScheduleAlert';
 import { HabitAutomationPanel } from '@/components/HabitAutomationPanel';
 import { HabitTemplates } from '@/components/HabitTemplates';
 import { GoogleFitIntegration } from '@/components/GoogleFitIntegration';
+import { StepGoalCard } from '@/components/StepGoalCard';
 import { HabitCategory, HabitFrequency, HabitWithStats } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -259,10 +260,11 @@ export default function Index() {
           </section>
         )}
 
-        {/* Google Fit Integration */}
+        {/* Fitness & Integrations */}
         <section>
-          <h2 className="text-2xl font-display font-bold mb-4">📱 Integrations</h2>
+          <h2 className="text-2xl font-display font-bold mb-4">📱 Fitness & Integrations</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <StepGoalCard onGoalReached={() => toast.success('Great job hitting your step goal!')} />
             <GoogleFitIntegration />
           </div>
         </section>
