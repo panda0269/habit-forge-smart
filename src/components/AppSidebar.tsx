@@ -1,4 +1,4 @@
-import { Home, BarChart3, FileText, Trophy, Settings, Sparkles, LogOut, Bell, CalendarCheck } from 'lucide-react';
+import { Home, BarChart3, FileText, Trophy, Settings, Sparkles, LogOut, Bell, CalendarCheck, Activity } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
 import { useRewards } from '@/hooks/useRewards';
@@ -22,6 +22,7 @@ import {
 
 const navItems = [
   { title: 'Dashboard', url: '/', icon: Home },
+  { title: 'Fitness', url: '/fitness', icon: Activity },
   { title: 'Weekly Review', url: '/weekly-review', icon: CalendarCheck },
   { title: 'Analytics', url: '/analytics', icon: BarChart3 },
   { title: 'Reports', url: '/reports', icon: FileText },

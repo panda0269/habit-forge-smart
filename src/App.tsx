@@ -9,6 +9,7 @@ import Analytics from "./pages/Analytics";
 import Reports from "./pages/Reports";
 import Rewards from "./pages/Rewards";
 import WeeklyReview from "./pages/WeeklyReview";
+import Fitness from "./pages/Fitness";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/reports" element={<Reports />} />
           <Route path="/rewards" element={<Rewards />} />
           <Route path="/weekly-review" element={<WeeklyReview />} />
+          <Route path="/fitness" element={<Fitness />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
