@@ -47,6 +47,39 @@ export type Database = {
         }
         Relationships: []
       }
+      google_fit_data: {
+        Row: {
+          activity_segments: number | null
+          calories: number | null
+          created_at: string
+          id: string
+          steps: number | null
+          sync_date: string
+          synced_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_segments?: number | null
+          calories?: number | null
+          created_at?: string
+          id?: string
+          steps?: number | null
+          sync_date?: string
+          synced_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_segments?: number | null
+          calories?: number | null
+          created_at?: string
+          id?: string
+          steps?: number | null
+          sync_date?: string
+          synced_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       habit_logs: {
         Row: {
           completed: boolean

@@ -24,7 +24,6 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get the user from the JWT
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
@@ -35,7 +34,6 @@ serve(async (req) => {
       });
     }
 
-    // Get the provider token from user's identities
     const googleIdentity = user.identities?.find(i => i.provider === 'google');
     
     if (!googleIdentity) {
@@ -48,11 +46,43 @@ serve(async (req) => {
       });
     }
 
-    // Get the session to access provider_token
-    const { data: sessionData } = await supabase.auth.getSession();
-    const providerToken = sessionData?.session?.provider_token;
+    // Get provider token from identity data
+    const identityData = googleIdentity.identity_data;
+    const providerToken = identityData?.provider_token;
 
+    const { action, saveToDb } = await req.json();
+    
+    // Calculate date range (last 7 days)
+    const endTime = Date.now();
+    const startTime = endTime - (7 * 24 * 60 * 60 * 1000);
+
+    let fitnessData: any = { steps: [], calories: [], activities: [] };
+
+    // If no provider token, return cached data from DB
     if (!providerToken) {
+      console.log('No provider token, fetching cached data from DB');
+      const { data: cachedData } = await supabase
+        .from('google_fit_data')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('sync_date', new Date(startTime).toISOString().split('T')[0])
+        .order('sync_date', { ascending: true });
+
+      if (cachedData && cachedData.length > 0) {
+        fitnessData.steps = cachedData.map(d => ({ date: d.sync_date, count: d.steps }));
+        fitnessData.calories = cachedData.map(d => ({ date: d.sync_date, value: d.calories }));
+        fitnessData.activities = cachedData.map(d => ({ date: d.sync_date, segments: d.activity_segments }));
+        
+        return new Response(JSON.stringify({ 
+          success: true,
+          data: fitnessData,
+          cached: true,
+          period: { start: cachedData[0]?.sync_date, end: cachedData[cachedData.length - 1]?.sync_date }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       return new Response(JSON.stringify({ 
         error: 'No fitness access token',
         message: 'Please re-authenticate with Google to grant fitness access'
@@ -62,16 +92,8 @@ serve(async (req) => {
       });
     }
 
-    const { action } = await req.json();
-    
-    // Calculate date range (last 7 days)
-    const endTime = Date.now();
-    const startTime = endTime - (7 * 24 * 60 * 60 * 1000);
-
-    let fitnessData: any = {};
-
+    // Fetch fresh data from Google Fit API
     if (action === 'steps' || action === 'all') {
-      // Fetch step count data
       const stepsResponse = await fetch(
         `https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`,
         {
@@ -85,7 +107,7 @@ serve(async (req) => {
               dataTypeName: 'com.google.step_count.delta',
               dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
             }],
-            bucketByTime: { durationMillis: 86400000 }, // 1 day
+            bucketByTime: { durationMillis: 86400000 },
             startTimeMillis: startTime,
             endTimeMillis: endTime,
           }),
@@ -102,7 +124,6 @@ serve(async (req) => {
     }
 
     if (action === 'calories' || action === 'all') {
-      // Fetch calories burned
       const caloriesResponse = await fetch(
         `https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`,
         {
@@ -112,9 +133,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            aggregateBy: [{
-              dataTypeName: 'com.google.calories.expended'
-            }],
+            aggregateBy: [{ dataTypeName: 'com.google.calories.expended' }],
             bucketByTime: { durationMillis: 86400000 },
             startTimeMillis: startTime,
             endTimeMillis: endTime,
@@ -131,41 +150,30 @@ serve(async (req) => {
       }
     }
 
-    if (action === 'activity' || action === 'all') {
-      // Fetch activity segments
-      const activityResponse = await fetch(
-        `https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${providerToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            aggregateBy: [{
-              dataTypeName: 'com.google.activity.segment'
-            }],
-            bucketByTime: { durationMillis: 86400000 },
-            startTimeMillis: startTime,
-            endTimeMillis: endTime,
-          }),
-        }
-      );
-
-      if (activityResponse.ok) {
-        const activityData = await activityResponse.json();
-        fitnessData.activities = activityData.bucket?.map((bucket: any) => ({
-          date: new Date(parseInt(bucket.startTimeMillis)).toISOString().split('T')[0],
-          segments: bucket.dataset?.[0]?.point?.length || 0
-        })) || [];
+    // Save to database if requested
+    if (saveToDb && fitnessData.steps.length > 0) {
+      for (const stepData of fitnessData.steps) {
+        const calorieData = fitnessData.calories?.find((c: any) => c.date === stepData.date);
+        const activityData = fitnessData.activities?.find((a: any) => a.date === stepData.date);
+        
+        await supabase.from('google_fit_data').upsert({
+          user_id: user.id,
+          sync_date: stepData.date,
+          steps: stepData.count,
+          calories: calorieData?.value || 0,
+          activity_segments: activityData?.segments || 0,
+          synced_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,sync_date' });
       }
+      console.log('Google Fit data saved to DB for user:', user.id);
     }
 
-    console.log('Google Fit data fetched successfully for user:', user.id);
+    console.log('Google Fit data fetched for user:', user.id);
 
     return new Response(JSON.stringify({ 
       success: true,
       data: fitnessData,
+      cached: false,
       period: {
         start: new Date(startTime).toISOString().split('T')[0],
         end: new Date(endTime).toISOString().split('T')[0]

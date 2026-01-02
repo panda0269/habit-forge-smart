@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useHabits } from '@/hooks/useHabits';
+import { useGoogleFit } from '@/hooks/useGoogleFit';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, Plus, Sparkles, Flame, Target, TrendingUp, Bell } from 'lucide-react';
@@ -21,6 +22,7 @@ import { toast } from 'sonner';
 export default function Index() {
   const { user, loading: authLoading } = useAuth();
   const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, updateHabit, getUserCategory, refreshHabits, mergeHabits, createHabit } = useHabits();
+  const { triggerAutoSync } = useGoogleFit();
   const { scheduleHabitReminders, permission, requestPermission, testNotification, isSupported } = useNotifications();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -43,7 +45,9 @@ export default function Index() {
   const handleToggleHabit = useCallback(async (habitId: string) => {
     await toggleHabitCompletion(habitId);
     setAiTriggerCount(prev => prev + 1);
-  }, [toggleHabitCompletion]);
+    // Trigger Google Fit auto-sync
+    triggerAutoSync();
+  }, [toggleHabitCompletion, triggerAutoSync]);
 
   const handleHabitCreated = useCallback(async () => {
     // Refresh habits list after creation
