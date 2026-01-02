@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { HabitWithStats, UserCategory } from '@/lib/types';
-import { Send, Loader2, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Loader2, Bot, User, Sparkles, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Message {
@@ -29,14 +29,81 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  // Check if speech recognition is supported
+  const isSpeechSupported = typeof window !== 'undefined' && 
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (!isSpeechSupported) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = false;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US';
+
+    recognitionRef.current.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+      
+      setInput(transcript);
+
+      // If this is a final result, stop listening
+      if (event.results[event.results.length - 1].isFinal) {
+        setIsListening(false);
+      }
+    };
+
+    recognitionRef.current.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'not-allowed') {
+        toast.error('Microphone access denied. Please enable it in your browser settings.');
+      } else if (event.error !== 'aborted') {
+        toast.error('Voice input error. Please try again.');
+      }
+    };
+
+    recognitionRef.current.onend = () => {
+      setIsListening(false);
+    };
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [isSpeechSupported]);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      toast.error('Voice input is not supported in your browser.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setInput('');
+      recognitionRef.current.start();
+      setIsListening(true);
+      toast.info('Listening... Speak now!');
+    }
+  };
 
   const sendMessage = async (messageText: string) => {
     if (!messageText.trim() || isLoading) return;
@@ -113,6 +180,11 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
                   <p className="text-sm">
                     Hi! I'm Sage, your habit coach 🌟 Ask me anything about building better habits, 
                     staying motivated, or getting specific advice for your habits!
+                    {isSpeechSupported && (
+                      <span className="block mt-2 text-muted-foreground">
+                        💡 Tip: Use the microphone button for hands-free voice input!
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -196,10 +268,26 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about habit building..."
+          placeholder={isListening ? "Listening..." : "Ask about habit building..."}
           disabled={isLoading}
-          className="flex-1"
+          className={`flex-1 ${isListening ? 'border-primary bg-primary/5' : ''}`}
         />
+        {isSpeechSupported && (
+          <Button 
+            type="button" 
+            size="icon" 
+            variant={isListening ? "default" : "outline"}
+            onClick={toggleListening}
+            disabled={isLoading}
+            className={isListening ? 'animate-pulse' : ''}
+          >
+            {isListening ? (
+              <MicOff className="w-4 h-4" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
+          </Button>
+        )}
         <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
