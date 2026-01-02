@@ -17,6 +17,7 @@ import { HabitAutomationPanel } from '@/components/HabitAutomationPanel';
 import { HabitTemplates } from '@/components/HabitTemplates';
 import { GoogleFitIntegration } from '@/components/GoogleFitIntegration';
 import { StepGoalCard } from '@/components/StepGoalCard';
+import { WeeklyStepStats } from '@/components/WeeklyStepStats';
 import { HabitCategory, HabitFrequency, HabitWithStats } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -264,8 +265,23 @@ export default function Index() {
         <section>
           <h2 className="text-2xl font-display font-bold mb-4">📱 Fitness & Integrations</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <StepGoalCard onGoalReached={() => toast.success('Great job hitting your step goal!')} />
+            <StepGoalCard 
+              onGoalReached={async () => {
+                // Auto-complete 'Daily Steps' habit if it exists
+                const stepsHabit = habits.find(h => 
+                  h.title.toLowerCase().includes('step') || 
+                  h.title.toLowerCase().includes('walk')
+                );
+                if (stepsHabit && !stepsHabit.completedToday) {
+                  await toggleHabitCompletion(stepsHabit.id);
+                  toast.success(`Auto-completed "${stepsHabit.title}" habit!`);
+                }
+              }} 
+            />
             <GoogleFitIntegration />
+          </div>
+          <div className="mt-4">
+            <WeeklyStepStats />
           </div>
         </section>
 
