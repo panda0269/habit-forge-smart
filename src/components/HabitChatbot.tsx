@@ -2,10 +2,14 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { HabitWithStats, UserCategory } from '@/lib/types';
-import { Send, Loader2, Bot, User, Sparkles, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Send, Loader2, Bot, User, Sparkles, Mic, MicOff, Volume2, VolumeX, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -32,6 +36,10 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number>(0);
+  const [speechRate, setSpeechRate] = useState(1.0);
+  const [speechPitch, setSpeechPitch] = useState(1.0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -44,6 +52,39 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
 
   // Check if speech synthesis is supported
   const isTtsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+  // Load available voices
+  useEffect(() => {
+    if (!isTtsSupported) return;
+
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      // Filter to English voices for better UX
+      const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+      const voicesToUse = englishVoices.length > 0 ? englishVoices : voices;
+      setAvailableVoices(voicesToUse);
+      
+      // Set default voice (prefer natural-sounding ones)
+      if (voicesToUse.length > 0 && selectedVoiceIndex === 0) {
+        const preferredIndex = voicesToUse.findIndex(v => 
+          v.name.includes('Samantha') || 
+          v.name.includes('Google') || 
+          v.name.includes('Natural')
+        );
+        if (preferredIndex !== -1) {
+          setSelectedVoiceIndex(preferredIndex);
+        }
+      }
+    };
+
+    // Load voices immediately and on change
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [isTtsSupported, selectedVoiceIndex]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -59,21 +100,13 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+    utterance.rate = speechRate;
+    utterance.pitch = speechPitch;
     utterance.volume = 1.0;
 
-    // Try to get a natural-sounding voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(v => 
-      v.name.includes('Samantha') || 
-      v.name.includes('Google') || 
-      v.name.includes('Natural') ||
-      v.lang.startsWith('en')
-    ) || voices[0];
-    
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
+    // Use selected voice
+    if (availableVoices.length > 0 && availableVoices[selectedVoiceIndex]) {
+      utterance.voice = availableVoices[selectedVoiceIndex];
     }
 
     utterance.onstart = () => setIsSpeaking(true);
@@ -81,7 +114,7 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
     utterance.onerror = () => setIsSpeaking(false);
 
     window.speechSynthesis.speak(utterance);
-  }, [isTtsSupported, ttsEnabled]);
+  }, [isTtsSupported, ttsEnabled, availableVoices, selectedVoiceIndex, speechRate, speechPitch]);
 
   // Stop speaking
   const stopSpeaking = useCallback(() => {
@@ -270,29 +303,120 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
     sendMessage(input);
   };
 
+  const getVoiceDisplayName = (voice: SpeechSynthesisVoice) => {
+    // Clean up voice name for display
+    let name = voice.name;
+    // Remove common prefixes
+    name = name.replace(/^(Microsoft |Google |Apple )/i, '');
+    // Add language indicator if not obvious
+    if (!voice.lang.startsWith('en-US')) {
+      name += ` (${voice.lang})`;
+    }
+    return name;
+  };
+
   return (
     <div className="flex flex-col h-[400px]">
-      <div className="flex justify-end mb-2">
+      <div className="flex justify-end gap-2 mb-2">
         {isTtsSupported && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={toggleTts}
-            className="text-xs gap-1.5"
-          >
-            {ttsEnabled ? (
-              <>
-                <Volume2 className="w-3.5 h-3.5" />
-                Voice On
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-3.5 h-3.5" />
-                Voice Off
-              </>
-            )}
-          </Button>
+          <>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs gap-1.5"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                  Voice Settings
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 bg-popover border border-border z-50" align="end">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Voice</Label>
+                    <Select
+                      value={selectedVoiceIndex.toString()}
+                      onValueChange={(value) => setSelectedVoiceIndex(parseInt(value))}
+                    >
+                      <SelectTrigger className="w-full bg-background">
+                        <SelectValue placeholder="Select a voice" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border border-border z-50 max-h-[200px]">
+                        {availableVoices.map((voice, index) => (
+                          <SelectItem key={index} value={index.toString()}>
+                            {getVoiceDisplayName(voice)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label className="text-sm font-medium">Speed</Label>
+                      <span className="text-xs text-muted-foreground">{speechRate.toFixed(1)}x</span>
+                    </div>
+                    <Slider
+                      value={[speechRate]}
+                      onValueChange={(values) => setSpeechRate(values[0])}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label className="text-sm font-medium">Pitch</Label>
+                      <span className="text-xs text-muted-foreground">{speechPitch.toFixed(1)}</span>
+                    </div>
+                    <Slider
+                      value={[speechPitch]}
+                      onValueChange={(values) => setSpeechPitch(values[0])}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => speakText("Hi, I'm Sage! This is how I sound.")}
+                  >
+                    <Volume2 className="w-3.5 h-3.5 mr-1.5" />
+                    Preview Voice
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={toggleTts}
+              className="text-xs gap-1.5"
+            >
+              {ttsEnabled ? (
+                <>
+                  <Volume2 className="w-3.5 h-3.5" />
+                  Voice On
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-3.5 h-3.5" />
+                  Voice Off
+                </>
+              )}
+            </Button>
+          </>
         )}
       </div>
 
@@ -315,7 +439,7 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
                     )}
                     {isTtsSupported && (
                       <span className="block mt-1 text-muted-foreground">
-                        🔊 I'll speak my responses aloud. Toggle the voice button to mute.
+                        🔊 I'll speak my responses aloud. Use Voice Settings to change my voice!
                       </span>
                     )}
                   </p>
