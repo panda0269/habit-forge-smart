@@ -18,6 +18,8 @@ import { HabitTemplates } from '@/components/HabitTemplates';
 import { GoogleFitIntegration } from '@/components/GoogleFitIntegration';
 import { StepGoalCard } from '@/components/StepGoalCard';
 import { WeeklyStepStats } from '@/components/WeeklyStepStats';
+import { MonthlyStepCalendar } from '@/components/MonthlyStepCalendar';
+import { StepStreakBadges } from '@/components/StepStreakBadges';
 import { HabitCategory, HabitFrequency, HabitWithStats } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -280,8 +282,12 @@ export default function Index() {
             />
             <GoogleFitIntegration />
           </div>
-          <div className="mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <WeeklyStepStats />
+            <StepStreakBadges />
+          </div>
+          <div className="mt-4">
+            <MonthlyStepCalendar />
           </div>
         </section>
 
