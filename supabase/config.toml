@@ -1,5 +1,8 @@
 project_id = "bbxtttigsybxwjrtxasx"
 
+[functions.google-fit]
+verify_jwt = true
+
 [functions.ai-recommendations]
 verify_jwt = true
 
