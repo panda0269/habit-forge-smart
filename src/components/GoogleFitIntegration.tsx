@@ -1,87 +1,23 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+import { useGoogleFit } from '@/hooks/useGoogleFit';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
-import { Loader2, Activity, Footprints, Flame, RefreshCw, Link2, Unlink } from 'lucide-react';
+import { Loader2, Activity, Footprints, Flame, RefreshCw, Link2, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-interface FitnessData {
-  steps?: Array<{ date: string; count: number }>;
-  calories?: Array<{ date: string; value: number }>;
-  activities?: Array<{ date: string; segments: number }>;
-}
+import { formatDistanceToNow } from 'date-fns';
 
 export function GoogleFitIntegration() {
-  const { user, session } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [fitnessData, setFitnessData] = useState<FitnessData | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-
-  useEffect(() => {
-    // Check if user has Google identity
-    const googleIdentity = user?.identities?.find(i => i.provider === 'google');
-    setIsConnected(!!googleIdentity);
-  }, [user]);
-
-  const connectGoogleFit = async () => {
-    setConnecting(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/`,
-          scopes: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read',
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Google Fit connection error:', error);
-      toast.error('Failed to connect Google Fit');
-      setConnecting(false);
-    }
-  };
-
-  const fetchFitnessData = async () => {
-    if (!session?.access_token) {
-      toast.error('Please sign in first');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('google-fit', {
-        body: { action: 'all' },
-      });
-
-      if (error) throw error;
-
-      if (data.error) {
-        toast.error(data.message || data.error);
-        return;
-      }
-
-      setFitnessData(data.data);
-      toast.success('Fitness data synced!');
-    } catch (error) {
-      console.error('Error fetching fitness data:', error);
-      toast.error('Failed to fetch fitness data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const totalSteps = fitnessData?.steps?.reduce((sum, d) => sum + d.count, 0) || 0;
-  const totalCalories = fitnessData?.calories?.reduce((sum, d) => sum + d.value, 0) || 0;
-  const avgSteps = fitnessData?.steps?.length ? Math.round(totalSteps / fitnessData.steps.length) : 0;
+  const {
+    data,
+    loading,
+    isConnected,
+    lastSynced,
+    syncData,
+    connectGoogleFit,
+    totalSteps,
+    totalCalories,
+    avgSteps,
+  } = useGoogleFit();
 
   return (
     <Card variant="elevated" className="overflow-hidden">
@@ -93,7 +29,7 @@ export function GoogleFitIntegration() {
             </div>
             <div>
               <CardTitle className="text-lg">Google Fit</CardTitle>
-              <CardDescription>Sync your fitness data</CardDescription>
+              <CardDescription>Auto-syncs when you log habits</CardDescription>
             </div>
           </div>
           <Badge variant={isConnected ? 'default' : 'secondary'}>
@@ -111,26 +47,31 @@ export function GoogleFitIntegration() {
               <p className="text-sm text-muted-foreground mb-4">
                 Connect Google Fit to sync your steps, calories, and activity data
               </p>
-              <Button onClick={connectGoogleFit} disabled={connecting}>
-                {connecting && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
+              <Button onClick={connectGoogleFit}>
                 Connect Google Fit
               </Button>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={fetchFitnessData} disabled={loading}>
+            <div className="flex items-center justify-between">
+              {lastSynced && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Last synced {formatDistanceToNow(lastSynced, { addSuffix: true })}
+                </span>
+              )}
+              <Button variant="outline" size="sm" onClick={() => syncData()} disabled={loading}>
                 {loading ? (
                   <Loader2 className="animate-spin h-4 w-4" />
                 ) : (
                   <RefreshCw className="h-4 w-4" />
                 )}
-                <span className="ml-2">Sync Data</span>
+                <span className="ml-2">Sync Now</span>
               </Button>
             </div>
 
-            {fitnessData ? (
+            {data ? (
               <>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 rounded-xl bg-blue-500/10 text-center">
@@ -150,11 +91,11 @@ export function GoogleFitIntegration() {
                   </div>
                 </div>
 
-                {fitnessData.steps && fitnessData.steps.length > 0 && (
+                {data.steps && data.steps.length > 0 && (
                   <div className="h-48">
                     <p className="text-sm font-medium mb-2">Steps (Last 7 Days)</p>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={fitnessData.steps}>
+                      <BarChart data={data.steps}>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                         <XAxis 
                           dataKey="date" 
@@ -174,7 +115,7 @@ export function GoogleFitIntegration() {
               </>
             ) : (
               <div className="text-center py-6 text-muted-foreground">
-                <p className="text-sm">Click "Sync Data" to fetch your fitness data</p>
+                <p className="text-sm">Click "Sync Now" to fetch your fitness data</p>
               </div>
             )}
           </>
