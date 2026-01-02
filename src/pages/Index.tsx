@@ -14,6 +14,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { BehindScheduleAlert } from '@/components/BehindScheduleAlert';
 import { HabitAutomationPanel } from '@/components/HabitAutomationPanel';
 import { HabitTemplates } from '@/components/HabitTemplates';
+import { GoogleFitIntegration } from '@/components/GoogleFitIntegration';
 import { HabitCategory, HabitFrequency, HabitWithStats } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -253,6 +254,14 @@ export default function Index() {
             />
           </section>
         )}
+
+        {/* Google Fit Integration */}
+        <section>
+          <h2 className="text-2xl font-display font-bold mb-4">📱 Integrations</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <GoogleFitIntegration />
+          </div>
+        </section>
 
         {/* AI Recommendations */}
         {habits.length > 0 && (
