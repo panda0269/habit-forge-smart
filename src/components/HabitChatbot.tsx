@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { HabitWithStats, UserCategory } from '@/lib/types';
-import { Send, Loader2, Bot, User, Sparkles, Mic, MicOff } from 'lucide-react';
+import { Send, Loader2, Bot, User, Sparkles, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Message {
@@ -30,13 +30,20 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingTranscriptRef = useRef<string>('');
 
   // Check if speech recognition is supported
   const isSpeechSupported = typeof window !== 'undefined' && 
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+  // Check if speech synthesis is supported
+  const isTtsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -44,68 +51,47 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
     }
   }, [messages]);
 
-  // Initialize speech recognition
-  useEffect(() => {
-    if (!isSpeechSupported) return;
+  // Text-to-speech function
+  const speakText = useCallback((text: string) => {
+    if (!isTtsSupported || !ttsEnabled) return;
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = false;
-    recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = 'en-US';
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
 
-    recognitionRef.current.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join('');
-      
-      setInput(transcript);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
 
-      // If this is a final result, stop listening
-      if (event.results[event.results.length - 1].isFinal) {
-        setIsListening(false);
-      }
-    };
-
-    recognitionRef.current.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-      if (event.error === 'not-allowed') {
-        toast.error('Microphone access denied. Please enable it in your browser settings.');
-      } else if (event.error !== 'aborted') {
-        toast.error('Voice input error. Please try again.');
-      }
-    };
-
-    recognitionRef.current.onend = () => {
-      setIsListening(false);
-    };
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-    };
-  }, [isSpeechSupported]);
-
-  const toggleListening = () => {
-    if (!recognitionRef.current) {
-      toast.error('Voice input is not supported in your browser.');
-      return;
+    // Try to get a natural-sounding voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => 
+      v.name.includes('Samantha') || 
+      v.name.includes('Google') || 
+      v.name.includes('Natural') ||
+      v.lang.startsWith('en')
+    ) || voices[0];
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
     }
 
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      setInput('');
-      recognitionRef.current.start();
-      setIsListening(true);
-      toast.info('Listening... Speak now!');
-    }
-  };
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
 
-  const sendMessage = async (messageText: string) => {
+    window.speechSynthesis.speak(utterance);
+  }, [isTtsSupported, ttsEnabled]);
+
+  // Stop speaking
+  const stopSpeaking = useCallback(() => {
+    if (isTtsSupported) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  }, [isTtsSupported]);
+
+  const sendMessage = useCallback(async (messageText: string) => {
     if (!messageText.trim() || isLoading) return;
 
     const userMessage: Message = {
@@ -150,6 +136,9 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Speak the response
+      speakText(data.reply);
     } catch (err) {
       console.error('Chat error:', err);
       toast.error('Failed to send message. Please try again.');
@@ -159,6 +148,121 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
       setIsLoading(false);
       inputRef.current?.focus();
     }
+  }, [habits, isLoading, messages, userCategory, speakText]);
+
+  // Initialize speech recognition with auto-send on silence
+  useEffect(() => {
+    if (!isSpeechSupported) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = 'en-US';
+
+    recognitionRef.current.onresult = (event) => {
+      // Clear any existing silence timeout
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+      
+      setInput(transcript);
+      pendingTranscriptRef.current = transcript;
+
+      // Check if the last result is final
+      const lastResult = event.results[event.results.length - 1];
+      if (lastResult.isFinal && transcript.trim()) {
+        // Set a timeout to auto-send after 1.5 seconds of silence
+        silenceTimeoutRef.current = setTimeout(() => {
+          if (pendingTranscriptRef.current.trim()) {
+            const textToSend = pendingTranscriptRef.current.trim();
+            pendingTranscriptRef.current = '';
+            setInput('');
+            setIsListening(false);
+            if (recognitionRef.current) {
+              recognitionRef.current.stop();
+            }
+            sendMessage(textToSend);
+          }
+        }, 1500);
+      }
+    };
+
+    recognitionRef.current.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+      if (event.error === 'not-allowed') {
+        toast.error('Microphone access denied. Please enable it in your browser settings.');
+      } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
+        toast.error('Voice input error. Please try again.');
+      }
+    };
+
+    recognitionRef.current.onend = () => {
+      // Only reset if we're still supposed to be listening (handle unexpected stops)
+      if (isListening && pendingTranscriptRef.current.trim()) {
+        // Auto-send if there's pending text when recognition ends
+        const textToSend = pendingTranscriptRef.current.trim();
+        pendingTranscriptRef.current = '';
+        setInput('');
+        sendMessage(textToSend);
+      }
+      setIsListening(false);
+    };
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+    };
+  }, [isSpeechSupported, isListening, sendMessage]);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      toast.error('Voice input is not supported in your browser.');
+      return;
+    }
+
+    if (isListening) {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+      recognitionRef.current.stop();
+      setIsListening(false);
+      // If there's pending text, send it
+      if (pendingTranscriptRef.current.trim()) {
+        const textToSend = pendingTranscriptRef.current.trim();
+        pendingTranscriptRef.current = '';
+        setInput('');
+        sendMessage(textToSend);
+      }
+    } else {
+      // Stop any ongoing speech when starting to listen
+      stopSpeaking();
+      setInput('');
+      pendingTranscriptRef.current = '';
+      recognitionRef.current.start();
+      setIsListening(true);
+      toast.info('Listening... Will auto-send when you pause speaking.');
+    }
+  };
+
+  const toggleTts = () => {
+    if (isSpeaking) {
+      stopSpeaking();
+    }
+    setTtsEnabled(!ttsEnabled);
+    toast.info(ttsEnabled ? 'Voice responses disabled' : 'Voice responses enabled');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -168,6 +272,30 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
 
   return (
     <div className="flex flex-col h-[400px]">
+      <div className="flex justify-end mb-2">
+        {isTtsSupported && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={toggleTts}
+            className="text-xs gap-1.5"
+          >
+            {ttsEnabled ? (
+              <>
+                <Volume2 className="w-3.5 h-3.5" />
+                Voice On
+              </>
+            ) : (
+              <>
+                <VolumeX className="w-3.5 h-3.5" />
+                Voice Off
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
       <ScrollArea className="flex-1 pr-4" ref={scrollRef}>
         <div className="space-y-4 pb-4">
           {messages.length === 0 ? (
@@ -182,7 +310,12 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
                     staying motivated, or getting specific advice for your habits!
                     {isSpeechSupported && (
                       <span className="block mt-2 text-muted-foreground">
-                        💡 Tip: Use the microphone button for hands-free voice input!
+                        💡 Tip: Use the microphone button - I'll auto-send when you pause speaking!
+                      </span>
+                    )}
+                    {isTtsSupported && (
+                      <span className="block mt-1 text-muted-foreground">
+                        🔊 I'll speak my responses aloud. Toggle the voice button to mute.
                       </span>
                     )}
                   </p>
@@ -237,11 +370,24 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
                   }`}
                 >
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  <p className={`text-xs mt-1 ${
+                  <div className={`flex items-center gap-2 mt-1 ${
                     message.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                   }`}>
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+                    <span className="text-xs">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {message.role === 'assistant' && isTtsSupported && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        onClick={() => speakText(message.content)}
+                      >
+                        <Volume2 className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
@@ -260,6 +406,24 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
               </div>
             </div>
           )}
+
+          {isSpeaking && (
+            <div className="flex items-center justify-center gap-2 py-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full">
+                <Volume2 className="w-3 h-3 animate-pulse" />
+                <span>Speaking...</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 ml-1"
+                  onClick={stopSpeaking}
+                >
+                  <VolumeX className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
@@ -268,7 +432,7 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={isListening ? "Listening..." : "Ask about habit building..."}
+          placeholder={isListening ? "Listening... pause to auto-send" : "Ask about habit building..."}
           disabled={isLoading}
           className={`flex-1 ${isListening ? 'border-primary bg-primary/5' : ''}`}
         />
