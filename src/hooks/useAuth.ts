@@ -9,15 +9,22 @@ export function useAuth() {
 
   useEffect(() => {
     let cancelled = false;
+    const hasOAuthCode = new URL(window.location.href).searchParams.has('code');
 
     // Set up auth state listener FIRST
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
+
+      // If we are returning from an OAuth redirect, don't mark auth as "done" until
+      // exchangeCodeForSession has had a chance to run (otherwise route guards can
+      // redirect to /auth and strip query params).
+      if (!hasOAuthCode || session) {
+        setLoading(false);
+      }
     });
 
     // THEN handle OAuth code exchange (if present) and check for existing session
