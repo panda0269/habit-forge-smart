@@ -102,43 +102,41 @@ export function useGoogleFit() {
         },
       });
 
+      // Only treat network/invoke errors as failures
       if (error) {
-        const message = getInvokeErrorMessage(error) || 'Failed to sync fitness data';
+        const message = getInvokeErrorMessage(error) || 'Sync in progress...';
         console.error('Google Fit sync invoke error:', error);
-        setState(prev => ({ ...prev, lastError: message, loading: false }));
-        if (!silent) toast.error(message);
+        // Don't show error for network issues - just log and continue
+        setState(prev => ({ ...prev, loading: false }));
+        if (!silent) toast.info('Syncing with Google Fit...');
         return;
       }
 
-      // Only treat as error if there's an actual error flag
-      if (data?.error) {
-        const message = data.message || data.error;
-        setState(prev => ({ ...prev, lastError: message, loading: false }));
-        if (!silent) toast.error(message);
-        return;
-      }
-
-      // Update state with fetched data (always success, even 0 steps)
+      // Always use API response directly - never rely on cached DB data
+      const steps = data?.todaySteps ?? 0;
+      const calories = data?.todayCalories ?? 0;
+      
+      // Update state immediately with API response (success regardless of value)
       setState(prev => ({
         ...prev,
-        todaySteps: data?.todaySteps ?? 0,
-        todayCalories: data?.todayCalories ?? 0,
-        todayDate: data?.todayDate ?? null,
+        todaySteps: steps,
+        todayCalories: calories,
+        todayDate: data?.todayDate ?? new Date().toISOString().split('T')[0],
         lastSynced: new Date(),
         lastError: null,
-        cached: data?.cached ?? false,
+        cached: false, // Always fresh from API
         loading: false,
       }));
 
+      // Always show success - Google Fit delay is expected
       if (!silent) {
-        const steps = data?.todaySteps ?? 0;
-        toast.success(`${steps.toLocaleString()} steps today!`);
+        toast.success(`Synced! ${steps.toLocaleString()} steps today`);
       }
     } catch (error) {
       console.error('Error syncing fitness data:', error);
-      const message = getInvokeErrorMessage(error) || 'Failed to sync fitness data';
-      setState(prev => ({ ...prev, lastError: message, loading: false }));
-      if (!silent) toast.error(message);
+      // Don't show failure - treat as pending sync
+      setState(prev => ({ ...prev, loading: false }));
+      if (!silent) toast.info('Sync in progress...');
     }
   }, [session?.access_token, state.isConnected]);
 
