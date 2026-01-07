@@ -79,8 +79,16 @@ export function useGoogleFit() {
     setState(prev => ({ ...prev, loading: true }));
 
     try {
+      // Get the current session to check for provider_token
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
       const { data, error } = await supabase.functions.invoke('google-fit', {
-        body: { action: 'all', saveToDb: true },
+        body: { 
+          action: 'all', 
+          saveToDb: true,
+          // Pass the provider token from the browser session
+          providerToken: currentSession?.provider_token || null
+        },
       });
 
       if (error) throw error;

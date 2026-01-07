@@ -55,11 +55,11 @@ serve(async (req) => {
       });
     }
 
-    // Provider token is available in the session, not in identity_data
-    const providerToken = session.provider_token;
+    const { action, saveToDb, providerToken: clientProviderToken } = await req.json();
+    
+    // Provider token can come from session OR from client (passed from browser session)
+    const providerToken = session.provider_token || clientProviderToken;
     console.log('Provider token available:', !!providerToken);
-
-    const { action, saveToDb } = await req.json();
     
     // Calculate date range (last 7 days)
     const endTime = Date.now();
