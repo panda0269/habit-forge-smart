@@ -11,6 +11,7 @@ import Reports from "./pages/Reports";
 import Rewards from "./pages/Rewards";
 import WeeklyReview from "./pages/WeeklyReview";
 import Fitness from "./pages/Fitness";
+import Leaderboard from "./pages/Leaderboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/rewards" element={<Rewards />} />
           <Route path="/weekly-review" element={<WeeklyReview />} />
           <Route path="/fitness" element={<Fitness />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

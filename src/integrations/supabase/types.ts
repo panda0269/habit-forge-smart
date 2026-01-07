@@ -343,7 +343,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_leaderboard: {
+        Args: never
+        Returns: {
+          avg_completion_rate: number
+          best_streak: number
+          display_name: string
+          total_completions: number
+          total_habits: number
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       habit_category:
