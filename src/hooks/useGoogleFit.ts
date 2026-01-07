@@ -80,34 +80,47 @@ export function useGoogleFit() {
 
     try {
       // Get the current session to check for provider_token
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
       const { data, error } = await supabase.functions.invoke('google-fit', {
-        body: { 
-          action: 'all', 
+        body: {
+          action: 'all',
           saveToDb: true,
           // Pass the provider token from the browser session
-          providerToken: currentSession?.provider_token || null
+          providerToken: currentSession?.provider_token || null,
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Surface useful backend error details instead of a generic toast.
+        // (Most common case: missing Google Fit permissions / missing provider token.)
+        const message = (error as any)?.message || 'Failed to sync fitness data';
+        if (!silent) toast.error(message);
+        throw error;
+      }
 
-      if (data.error) {
+      if (data?.error) {
         if (!silent) toast.error(data.message || data.error);
         return;
       }
 
       setState(prev => ({
         ...prev,
-        data: data.data,
+        data: data?.data ?? null,
         lastSynced: new Date(),
       }));
 
       if (!silent) toast.success('Fitness data synced!');
     } catch (error) {
       console.error('Error syncing fitness data:', error);
-      if (!silent) toast.error('Failed to sync fitness data');
+
+      const message =
+        (error as any)?.message ||
+        'Failed to sync fitness data. Try reconnecting Google Fit.';
+
+      if (!silent) toast.error(message);
     } finally {
       setState(prev => ({ ...prev, loading: false }));
     }
