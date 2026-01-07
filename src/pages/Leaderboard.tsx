@@ -6,7 +6,8 @@ import { AppLayout } from '@/components/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Trophy, Medal, Award, Flame, Target, TrendingUp, Crown } from 'lucide-react';
+import { Trophy, Medal, Award, Flame, Target, TrendingUp, Crown, Zap, Star, Sparkles, Heart } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface LeaderboardEntry {
   user_id: string;
@@ -17,6 +18,67 @@ interface LeaderboardEntry {
   best_streak: number;
   avg_completion_rate: number;
 }
+
+// Achievement badges based on stats
+const getAchievementBadges = (entry: LeaderboardEntry) => {
+  const badges: { icon: React.ReactNode; label: string; color: string }[] = [];
+  
+  // Streak badges
+  if (entry.best_streak >= 30) {
+    badges.push({ icon: <Flame className="w-3 h-3" />, label: "🔥 Fire Streak", color: "bg-orange-500/20 text-orange-600 border-orange-500/30" });
+  } else if (entry.best_streak >= 14) {
+    badges.push({ icon: <Zap className="w-3 h-3" />, label: "⚡ Hot Streak", color: "bg-yellow-500/20 text-yellow-600 border-yellow-500/30" });
+  } else if (entry.best_streak >= 7) {
+    badges.push({ icon: <Star className="w-3 h-3" />, label: "✨ Week Warrior", color: "bg-amber-500/20 text-amber-600 border-amber-500/30" });
+  }
+  
+  // Completion rate badges
+  if (entry.avg_completion_rate >= 95) {
+    badges.push({ icon: <Crown className="w-3 h-3" />, label: "👑 Perfectionist", color: "bg-purple-500/20 text-purple-600 border-purple-500/30" });
+  } else if (entry.avg_completion_rate >= 80) {
+    badges.push({ icon: <Target className="w-3 h-3" />, label: "🎯 Consistent", color: "bg-green-500/20 text-green-600 border-green-500/30" });
+  }
+  
+  // Volume badges
+  if (entry.total_completions >= 200) {
+    badges.push({ icon: <Sparkles className="w-3 h-3" />, label: "💪 Power User", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" });
+  } else if (entry.total_completions >= 100) {
+    badges.push({ icon: <Heart className="w-3 h-3" />, label: "❤️ Dedicated", color: "bg-pink-500/20 text-pink-600 border-pink-500/30" });
+  }
+  
+  // Habit count badges
+  if (entry.total_habits >= 7) {
+    badges.push({ icon: <Star className="w-3 h-3" />, label: "🌟 Multitasker", color: "bg-indigo-500/20 text-indigo-600 border-indigo-500/30" });
+  }
+  
+  return badges;
+};
+
+// Streak indicator component
+const StreakIndicator = ({ streak }: { streak: number }) => {
+  const getStreakLevel = () => {
+    if (streak >= 30) return { flames: 5, color: 'text-red-500', label: 'Legendary' };
+    if (streak >= 21) return { flames: 4, color: 'text-orange-500', label: 'Epic' };
+    if (streak >= 14) return { flames: 3, color: 'text-yellow-500', label: 'Hot' };
+    if (streak >= 7) return { flames: 2, color: 'text-amber-400', label: 'Warm' };
+    if (streak >= 3) return { flames: 1, color: 'text-amber-300', label: 'Starting' };
+    return { flames: 0, color: 'text-muted-foreground', label: '' };
+  };
+  
+  const { flames, color, label } = getStreakLevel();
+  
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: Math.max(1, flames) }).map((_, i) => (
+          <Flame key={i} className={cn("w-4 h-4", flames > 0 ? color : 'text-muted-foreground/30')} />
+        ))}
+      </div>
+      <span className="font-bold text-lg">{streak}</span>
+      {label && <span className="text-[10px] text-muted-foreground">{label}</span>}
+    </div>
+  );
+};
 
 export default function Leaderboard() {
   const { user, loading: authLoading } = useAuth();
@@ -115,8 +177,18 @@ export default function Leaderboard() {
                   </AvatarFallback>
                 </Avatar>
                 <h3 className="font-semibold truncate">{leaderboard[1]?.display_name}</h3>
-                <p className="text-2xl font-bold text-gray-500">{leaderboard[1]?.total_completions}</p>
-                <p className="text-xs text-muted-foreground">completions</p>
+                <div className="my-2">
+                  <StreakIndicator streak={leaderboard[1]?.best_streak || 0} />
+                </div>
+                <p className="text-xl font-bold text-gray-500">{leaderboard[1]?.total_completions}</p>
+                <p className="text-xs text-muted-foreground mb-2">completions</p>
+                <div className="flex flex-wrap gap-1 justify-center">
+                  {getAchievementBadges(leaderboard[1]).slice(0, 2).map((badge, i) => (
+                    <span key={i} className={cn("text-[10px] px-1.5 py-0.5 rounded-full border", badge.color)}>
+                      {badge.label}
+                    </span>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
@@ -132,8 +204,18 @@ export default function Leaderboard() {
                   </AvatarFallback>
                 </Avatar>
                 <h3 className="font-bold text-lg truncate">{leaderboard[0]?.display_name}</h3>
-                <p className="text-3xl font-bold text-yellow-600">{leaderboard[0]?.total_completions}</p>
-                <p className="text-sm text-muted-foreground">completions</p>
+                <div className="my-2">
+                  <StreakIndicator streak={leaderboard[0]?.best_streak || 0} />
+                </div>
+                <p className="text-2xl font-bold text-yellow-600">{leaderboard[0]?.total_completions}</p>
+                <p className="text-sm text-muted-foreground mb-2">completions</p>
+                <div className="flex flex-wrap gap-1 justify-center">
+                  {getAchievementBadges(leaderboard[0]).slice(0, 3).map((badge, i) => (
+                    <span key={i} className={cn("text-[10px] px-1.5 py-0.5 rounded-full border", badge.color)}>
+                      {badge.label}
+                    </span>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
@@ -149,8 +231,18 @@ export default function Leaderboard() {
                   </AvatarFallback>
                 </Avatar>
                 <h3 className="font-semibold truncate">{leaderboard[2]?.display_name}</h3>
-                <p className="text-2xl font-bold text-amber-600">{leaderboard[2]?.total_completions}</p>
-                <p className="text-xs text-muted-foreground">completions</p>
+                <div className="my-2">
+                  <StreakIndicator streak={leaderboard[2]?.best_streak || 0} />
+                </div>
+                <p className="text-xl font-bold text-amber-600">{leaderboard[2]?.total_completions}</p>
+                <p className="text-xs text-muted-foreground mb-2">completions</p>
+                <div className="flex flex-wrap gap-1 justify-center">
+                  {getAchievementBadges(leaderboard[2]).slice(0, 2).map((badge, i) => (
+                    <span key={i} className={cn("text-[10px] px-1.5 py-0.5 rounded-full border", badge.color)}>
+                      {badge.label}
+                    </span>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -175,6 +267,7 @@ export default function Leaderboard() {
                 {leaderboard.map((entry, index) => {
                   const rank = index + 1;
                   const isCurrentUser = entry.user_id === user?.id;
+                  const badges = getAchievementBadges(entry);
                   
                   return (
                     <div
@@ -197,24 +290,38 @@ export default function Leaderboard() {
                       </Avatar>
                       
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold truncate">{entry.display_name}</h3>
                           {isCurrentUser && (
                             <Badge variant="outline" className="text-xs">You</Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {entry.total_habits} habits tracked
-                        </p>
+                        <div className="flex items-center gap-1 flex-wrap mt-1">
+                          {badges.slice(0, 3).map((badge, i) => (
+                            <span key={i} className={cn("text-[10px] px-1.5 py-0.5 rounded-full border", badge.color)}>
+                              {badge.label}
+                            </span>
+                          ))}
+                          {badges.length > 3 && (
+                            <span className="text-[10px] text-muted-foreground">+{badges.length - 3} more</span>
+                          )}
+                        </div>
                       </div>
                       
                       <div className="flex items-center gap-6 text-right">
-                        <div>
-                          <div className="flex items-center gap-1 justify-end">
-                            <Flame className="w-4 h-4 text-orange-500" />
-                            <span className="font-bold">{entry.best_streak}</span>
+                        <div className="flex flex-col items-center">
+                          <div className="flex items-center gap-0.5">
+                            {Array.from({ length: Math.min(3, Math.ceil(entry.best_streak / 10)) }).map((_, i) => (
+                              <Flame key={i} className={cn(
+                                "w-3 h-3",
+                                entry.best_streak >= 21 ? "text-red-500" :
+                                entry.best_streak >= 14 ? "text-orange-500" :
+                                entry.best_streak >= 7 ? "text-yellow-500" : "text-amber-300"
+                              )} />
+                            ))}
                           </div>
-                          <p className="text-xs text-muted-foreground">streak</p>
+                          <span className="font-bold">{entry.best_streak}</span>
+                          <p className="text-[10px] text-muted-foreground">streak</p>
                         </div>
                         
                         <div>
