@@ -78,6 +78,20 @@ export function useGoogleFit() {
 
     setState(prev => ({ ...prev, loading: true }));
 
+    const getInvokeErrorMessage = (err: unknown) => {
+      const anyErr = err as any;
+      const contextBody = anyErr?.context?.body;
+      if (typeof contextBody === 'string') {
+        try {
+          const parsed = JSON.parse(contextBody);
+          return parsed?.message || parsed?.error;
+        } catch {
+          return contextBody;
+        }
+      }
+      return anyErr?.message;
+    };
+
     try {
       // Get the current session to check for provider_token
       const {
@@ -94,11 +108,10 @@ export function useGoogleFit() {
       });
 
       if (error) {
-        // Surface useful backend error details instead of a generic toast.
-        // (Most common case: missing Google Fit permissions / missing provider token.)
-        const message = (error as any)?.message || 'Failed to sync fitness data';
+        const message = getInvokeErrorMessage(error) || 'Failed to sync fitness data';
+        console.error('Google Fit sync invoke error:', error);
         if (!silent) toast.error(message);
-        throw error;
+        return;
       }
 
       if (data?.error) {
@@ -117,7 +130,7 @@ export function useGoogleFit() {
       console.error('Error syncing fitness data:', error);
 
       const message =
-        (error as any)?.message ||
+        getInvokeErrorMessage(error) ||
         'Failed to sync fitness data. Try reconnecting Google Fit.';
 
       if (!silent) toast.error(message);
