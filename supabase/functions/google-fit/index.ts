@@ -6,9 +6,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Helper to return success response (always 200)
-function successResponse(data: Record<string, unknown>) {
-  return new Response(JSON.stringify({ success: true, ...data }), {
+// Always return HTTP 200 with { steps: number }
+function successResponse(steps: number, extras: Record<string, unknown> = {}) {
+  return new Response(JSON.stringify({ 
+    success: true, 
+    steps,
+    todaySteps: steps, // backwards compat
+    ...extras 
+  }), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
@@ -28,6 +33,9 @@ serve(async (req) => {
     });
   }
 
+  const now = new Date();
+  const todayDate = now.toISOString().split('T')[0];
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -42,95 +50,54 @@ serve(async (req) => {
 
     const { data: { session }, error: sessionError } = await supabaseUser.auth.getSession();
 
-    // Calculate today's date for all responses
-    const now = new Date();
-    const todayDate = now.toISOString().split('T')[0];
-
     if (sessionError || !session?.user) {
       console.log('Invalid session, returning 0 steps');
-      return successResponse({ 
-        todaySteps: 0,
-        todayCalories: 0,
-        todayDate,
-        cached: false,
-        hasToken: false,
-        message: 'Invalid session - please sign in again'
-      });
+      return successResponse(0, { todayDate, message: 'Invalid session' });
     }
 
     const user = session.user;
     const googleIdentity = user.identities?.find(i => i.provider === 'google');
     
     if (!googleIdentity) {
-      console.log('No Google account linked, returning 0 steps');
-      return successResponse({ 
-        todaySteps: 0,
-        todayCalories: 0,
-        todayDate,
-        cached: false,
-        hasToken: false,
-        message: 'Please sign in with Google to access fitness data'
-      });
+      console.log('No Google account linked');
+      return successResponse(0, { todayDate, message: 'Please sign in with Google' });
     }
 
+    // Get provider token from request body or session
     let providerToken: string | null = null;
     try {
       const body = await req.json();
-      providerToken = session.provider_token || body?.providerToken || null;
+      providerToken = body?.providerToken || session.provider_token || null;
     } catch {
       providerToken = session.provider_token || null;
     }
     
     console.log('Provider token available:', !!providerToken);
     
-    // Calculate time range: TODAY only (midnight to now)
+    // If no token, return 0 (don't read from DB - user wants live data)
+    if (!providerToken) {
+      console.log('No provider token - cannot fetch live data');
+      return successResponse(0, { 
+        todayDate, 
+        message: 'No Google token. Please re-authenticate to sync live data.' 
+      });
+    }
+
+    // Calculate time range: TODAY 00:00 local → now
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const startTimeMillis = todayStart.getTime();
     const endTimeMillis = now.getTime();
 
-    console.log(`Fetching steps for today: ${todayDate}, range: ${startTimeMillis} - ${endTimeMillis}`);
+    console.log(`Fetching LIVE steps for ${todayDate}: ${new Date(startTimeMillis).toISOString()} → ${new Date(endTimeMillis).toISOString()}`);
 
-    // If no provider token, return cached data for today from DB
-    if (!providerToken) {
-      console.log('No provider token, fetching cached data from DB for today');
-      try {
-        const { data: cachedData } = await supabaseAdmin
-          .from('google_fit_data')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('sync_date', todayDate)
-          .maybeSingle();
-
-        return successResponse({ 
-          todaySteps: cachedData?.steps ?? 0,
-          todayCalories: cachedData?.calories ?? 0,
-          todayDate,
-          cached: true,
-          hasToken: false,
-          message: cachedData ? 'Showing cached data' : 'No data yet. Re-authenticate with Google to sync.'
-        });
-      } catch (dbError) {
-        console.error('DB read error:', dbError);
-        return successResponse({ 
-          todaySteps: 0,
-          todayCalories: 0,
-          todayDate,
-          cached: false,
-          hasToken: false,
-          message: 'Could not read cached data'
-        });
-      }
-    }
-
-    // Fetch TODAY's steps from Google Fit API
+    // ALWAYS fetch from Google Fit API - never rely on DB for "Sync now"
     let todaySteps = 0;
     let todayCalories = 0;
-    let fetchError: string | null = null;
 
     try {
-      console.log('Fetching steps from Google Fit API...');
+      console.log('Calling Google Fit API for steps...');
       const stepsResponse = await fetch(
-        `https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`,
+        'https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate',
         {
           method: 'POST',
           headers: {
@@ -151,35 +118,35 @@ serve(async (req) => {
 
       if (!stepsResponse.ok) {
         const bodyText = await stepsResponse.text();
-        console.error('Google Fit steps API error:', stepsResponse.status, bodyText);
-        fetchError = `Google Fit API returned ${stepsResponse.status}`;
-        // Don't throw - continue with 0 steps
+        console.error('Google Fit API error:', stepsResponse.status, bodyText);
+        // Don't throw - return 0 steps (empty data is valid)
       } else {
         const stepsData = await stepsResponse.json();
-        console.log('Steps API response:', JSON.stringify(stepsData));
+        console.log('Google Fit raw response:', JSON.stringify(stepsData));
 
-        // Extract step count from buckets
+        // Parse step count from buckets (empty buckets = 0 steps, not error)
         if (stepsData.bucket && stepsData.bucket.length > 0) {
           for (const bucket of stepsData.bucket) {
             const points = bucket.dataset?.[0]?.point || [];
             for (const point of points) {
-              todaySteps += point.value?.[0]?.intVal || 0;
+              const val = point.value?.[0]?.intVal;
+              if (typeof val === 'number') {
+                todaySteps += val;
+              }
             }
           }
         }
-        console.log('Today steps extracted:', todaySteps);
+        console.log('Extracted steps from API:', todaySteps);
       }
     } catch (stepsError) {
-      console.error('Steps fetch exception:', stepsError);
-      fetchError = 'Failed to fetch steps from Google Fit';
-      // Continue with 0 steps
+      console.error('Steps fetch error:', stepsError);
+      // Return 0 - don't fail
     }
 
-    // Fetch TODAY's calories (optional, don't fail if this errors)
+    // Fetch calories (optional)
     try {
-      console.log('Fetching calories from Google Fit API...');
       const caloriesResponse = await fetch(
-        `https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate`,
+        'https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate',
         {
           method: 'POST',
           headers: {
@@ -205,18 +172,15 @@ serve(async (req) => {
             }
           }
         }
-        console.log('Today calories extracted:', todayCalories);
-      } else {
-        console.warn('Calories fetch failed, continuing with 0');
+        console.log('Extracted calories from API:', todayCalories);
       }
     } catch (caloriesError) {
-      console.warn('Calories fetch exception:', caloriesError);
-      // Continue with 0 calories
+      console.warn('Calories fetch error:', caloriesError);
     }
 
-    // Save to DB (log error but don't fail)
+    // Upsert to DB (log error but never fail the response)
     try {
-      console.log(`Upserting to DB: user=${user.id}, date=${todayDate}, steps=${todaySteps}, calories=${todayCalories}`);
+      console.log(`Saving to DB: steps=${todaySteps}, calories=${todayCalories}`);
       const { error: upsertError } = await supabaseAdmin.from('google_fit_data').upsert({
         user_id: user.id,
         sync_date: todayDate,
@@ -227,35 +191,25 @@ serve(async (req) => {
       }, { onConflict: 'user_id,sync_date' });
 
       if (upsertError) {
-        console.error('DB upsert error:', upsertError);
-      } else {
-        console.log('Successfully saved to DB');
+        console.error('DB upsert error (non-fatal):', upsertError);
       }
     } catch (dbError) {
-      console.error('DB upsert exception:', dbError);
-      // Don't fail - still return the data
+      console.error('DB exception (non-fatal):', dbError);
     }
 
-    return successResponse({ 
-      todaySteps,
+    // Return live API data
+    return successResponse(todaySteps, { 
       todayCalories,
       todayDate,
-      cached: false,
-      hasToken: true,
-      ...(fetchError ? { warning: fetchError } : {})
+      source: 'google_fit_api'
     });
 
   } catch (error) {
-    // Catch-all: still return 200 with 0 steps
-    console.error('Google Fit unexpected error:', error);
-    const now = new Date();
-    return successResponse({ 
-      todaySteps: 0,
-      todayCalories: 0,
-      todayDate: now.toISOString().split('T')[0],
-      cached: false,
-      hasToken: false,
-      message: error instanceof Error ? error.message : 'Unexpected error occurred'
+    // Catch-all: return 0 with HTTP 200
+    console.error('Unexpected error:', error);
+    return successResponse(0, { 
+      todayDate,
+      message: error instanceof Error ? error.message : 'Unexpected error'
     });
   }
 });
