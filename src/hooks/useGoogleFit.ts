@@ -117,12 +117,16 @@ export function useGoogleFit() {
         return;
       }
 
+      // Only treat as error if there's an actual error flag
       if (data?.error) {
         const message = data.message || data.error;
         setState(prev => ({ ...prev, lastError: message }));
         if (!silent) toast.error(message);
         return;
       }
+
+      // Handle empty but successful response
+      const isEmpty = data?.empty || (data?.data?.steps?.length === 0 && data?.data?.calories?.length === 0);
 
       setState(prev => ({
         ...prev,
@@ -131,7 +135,13 @@ export function useGoogleFit() {
         lastError: null,
       }));
 
-      if (!silent) toast.success('Fitness data synced!');
+      if (!silent) {
+        if (isEmpty) {
+          toast.info('No fitness data found yet');
+        } else {
+          toast.success('Fitness data synced!');
+        }
+      }
     } catch (error) {
       console.error('Error syncing fitness data:', error);
 

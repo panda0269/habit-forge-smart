@@ -79,7 +79,7 @@ export function GoogleFitIntegration() {
               </div>
             )}
 
-            {data ? (
+            {data && (data.steps?.length > 0 || data.calories?.length > 0) ? (
               <>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 rounded-xl bg-blue-500/10 text-center">
@@ -122,8 +122,14 @@ export function GoogleFitIntegration() {
                 )}
               </>
             ) : (
-              <div className="text-center py-6 text-muted-foreground">
-                <p className="text-sm">Click "Sync Now" to fetch your fitness data</p>
+              <div className="text-center py-6 space-y-2">
+                <div className="p-3 rounded-full bg-muted w-fit mx-auto">
+                  <Footprints className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No fitness data yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Click "Sync Now" to fetch your steps and calories from Google Fit
+                </p>
               </div>
             )}
           </>

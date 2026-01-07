@@ -92,11 +92,14 @@ serve(async (req) => {
         });
       }
 
+      // No cached data yet - return empty success (not an error)
       return new Response(JSON.stringify({ 
-        error: 'No fitness access token',
-        message: 'Please re-authenticate with Google to grant fitness access'
+        success: true,
+        data: fitnessData,
+        cached: true,
+        empty: true,
+        message: 'No fitness data synced yet. Re-authenticate with Google to sync fresh data.'
       }), {
-        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
