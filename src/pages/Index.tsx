@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useHabits } from '@/hooks/useHabits';
-import { useGoogleFit } from '@/hooks/useGoogleFit';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, Plus, Sparkles, Flame, Target, TrendingUp, Bell } from 'lucide-react';
@@ -15,19 +14,13 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { BehindScheduleAlert } from '@/components/BehindScheduleAlert';
 import { HabitAutomationPanel } from '@/components/HabitAutomationPanel';
 import { HabitTemplates } from '@/components/HabitTemplates';
-import { GoogleFitIntegration } from '@/components/GoogleFitIntegration';
-import { StepGoalCard } from '@/components/StepGoalCard';
-import { WeeklyStepStats } from '@/components/WeeklyStepStats';
-import { MonthlyStepCalendar } from '@/components/MonthlyStepCalendar';
-import { StepStreakBadges } from '@/components/StepStreakBadges';
 import { HabitCategory, HabitFrequency, HabitWithStats } from '@/lib/types';
 import { toast } from 'sonner';
 
 export default function Index() {
   const { user, loading: authLoading } = useAuth();
   const { habits, loading: habitsLoading, toggleHabitCompletion, deleteHabit, updateHabit, getUserCategory, refreshHabits, mergeHabits, createHabit } = useHabits();
-  const { triggerAutoSync } = useGoogleFit();
-  const { scheduleHabitReminders, permission, requestPermission, testNotification, isSupported } = useNotifications();
+  const { scheduleHabitReminders, permission, requestPermission, isSupported } = useNotifications();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedHabit, setSelectedHabit] = useState<HabitWithStats | null>(null);
@@ -49,12 +42,9 @@ export default function Index() {
   const handleToggleHabit = useCallback(async (habitId: string) => {
     await toggleHabitCompletion(habitId);
     setAiTriggerCount(prev => prev + 1);
-    // Trigger Google Fit auto-sync
-    triggerAutoSync();
-  }, [toggleHabitCompletion, triggerAutoSync]);
+  }, [toggleHabitCompletion]);
 
   const handleHabitCreated = useCallback(async () => {
-    // Refresh habits list after creation
     await refreshHabits();
     setAiTriggerCount(prev => prev + 1);
   }, [refreshHabits]);
@@ -262,34 +252,6 @@ export default function Index() {
             />
           </section>
         )}
-
-        {/* Fitness & Integrations */}
-        <section>
-          <h2 className="text-2xl font-display font-bold mb-4">📱 Fitness & Integrations</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <StepGoalCard 
-              onGoalReached={async () => {
-                // Auto-complete 'Daily Steps' habit if it exists
-                const stepsHabit = habits.find(h => 
-                  h.title.toLowerCase().includes('step') || 
-                  h.title.toLowerCase().includes('walk')
-                );
-                if (stepsHabit && !stepsHabit.completedToday) {
-                  await toggleHabitCompletion(stepsHabit.id);
-                  toast.success(`Auto-completed "${stepsHabit.title}" habit!`);
-                }
-              }} 
-            />
-            <GoogleFitIntegration />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <WeeklyStepStats />
-            <StepStreakBadges />
-          </div>
-          <div className="mt-4">
-            <MonthlyStepCalendar />
-          </div>
-        </section>
 
         {/* AI Recommendations */}
         {habits.length > 0 && (
