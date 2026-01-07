@@ -7,10 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, ArrowLeft } from 'lucide-react';
+
+type AuthView = 'login' | 'signup' | 'forgot-password';
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [view, setView] = useState<AuthView>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -28,14 +30,11 @@ export default function Auth() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      // If there's a stale/invalid refresh token in storage, it can break OAuth.
-      // Clear local auth state first; Google OAuth will establish a fresh session.
       await supabase.auth.signOut();
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          // Land back on /auth so no protected page redirects can race the OAuth callback.
           redirectTo: `${window.location.origin}/auth`,
           scopes:
             'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read',
@@ -52,17 +51,41 @@ export default function Auth() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast.error('Please enter your email address');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      if (error) throw error;
+      
+      toast.success('Password reset email sent! Check your inbox.');
+      setView('login');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      if (isLogin) {
+      if (view === 'login') {
         const { error } = await signIn(email, password);
         if (error) throw error;
         toast.success('Welcome back!');
         navigate('/');
-      } else {
+      } else if (view === 'signup') {
         const { error } = await signUp(email, password, displayName);
         if (error) throw error;
         toast.success('Account created! You can now sign in.');
@@ -75,6 +98,50 @@ export default function Auth() {
     }
   };
 
+  if (view === 'forgot-password') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background p-4">
+        <Card variant="elevated" className="w-full max-w-md animate-fade-in">
+          <CardHeader className="text-center space-y-4">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-glow">
+              <Sparkles className="w-8 h-8 text-primary-foreground" />
+            </div>
+            <CardTitle className="text-3xl font-display">Reset Password</CardTitle>
+            <CardDescription>
+              Enter your email and we'll send you a link to reset your password
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <Input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-12"
+              />
+              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
+                {loading && <Loader2 className="animate-spin" />}
+                Send Reset Link
+              </Button>
+            </form>
+            <div className="mt-6 text-center">
+              <button
+                type="button"
+                onClick={() => setView('login')}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Sign In
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background p-4">
       <Card variant="elevated" className="w-full max-w-md animate-fade-in">
@@ -83,15 +150,15 @@ export default function Auth() {
             <Sparkles className="w-8 h-8 text-primary-foreground" />
           </div>
           <CardTitle className="text-3xl font-display">
-            {isLogin ? 'Welcome Back' : 'Get Started'}
+            {view === 'login' ? 'Welcome Back' : 'Get Started'}
           </CardTitle>
           <CardDescription>
-            {isLogin ? 'Sign in to continue your habit journey' : 'Create an account to build better habits'}
+            {view === 'login' ? 'Sign in to continue your habit journey' : 'Create an account to build better habits'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+            {view === 'signup' && (
               <Input
                 type="text"
                 placeholder="Display Name"
@@ -117,9 +184,20 @@ export default function Auth() {
               minLength={6}
               className="h-12"
             />
+            {view === 'login' && (
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => setView('forgot-password')}
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
             <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
               {loading && <Loader2 className="animate-spin" />}
-              {isLogin ? 'Sign In' : 'Create Account'}
+              {view === 'login' ? 'Sign In' : 'Create Account'}
             </Button>
           </form>
 
@@ -152,10 +230,10 @@ export default function Auth() {
           <div className="mt-6 text-center">
             <button
               type="button"
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => setView(view === 'login' ? 'signup' : 'login')}
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
             >
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+              {view === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
             </button>
           </div>
         </CardContent>
