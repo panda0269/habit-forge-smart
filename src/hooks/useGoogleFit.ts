@@ -14,6 +14,7 @@ interface GoogleFitState {
   loading: boolean;
   isConnected: boolean;
   lastSynced: Date | null;
+  lastError: string | null;
 }
 
 export function useGoogleFit() {
@@ -23,6 +24,7 @@ export function useGoogleFit() {
     loading: false,
     isConnected: false,
     lastSynced: null,
+    lastError: null,
   });
 
   // Check if user has Google identity
@@ -110,12 +112,15 @@ export function useGoogleFit() {
       if (error) {
         const message = getInvokeErrorMessage(error) || 'Failed to sync fitness data';
         console.error('Google Fit sync invoke error:', error);
+        setState(prev => ({ ...prev, lastError: message }));
         if (!silent) toast.error(message);
         return;
       }
 
       if (data?.error) {
-        if (!silent) toast.error(data.message || data.error);
+        const message = data.message || data.error;
+        setState(prev => ({ ...prev, lastError: message }));
+        if (!silent) toast.error(message);
         return;
       }
 
@@ -123,6 +128,7 @@ export function useGoogleFit() {
         ...prev,
         data: data?.data ?? null,
         lastSynced: new Date(),
+        lastError: null,
       }));
 
       if (!silent) toast.success('Fitness data synced!');
@@ -133,6 +139,7 @@ export function useGoogleFit() {
         getInvokeErrorMessage(error) ||
         'Failed to sync fitness data. Try reconnecting Google Fit.';
 
+      setState(prev => ({ ...prev, lastError: message }));
       if (!silent) toast.error(message);
     } finally {
       setState(prev => ({ ...prev, loading: false }));
