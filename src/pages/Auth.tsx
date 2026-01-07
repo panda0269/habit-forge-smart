@@ -36,12 +36,8 @@ export default function Auth() {
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth`,
-          scopes:
-            'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read',
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          // Keep scopes minimal for public sign-in. (Google Fit scopes can require extra verification and block new users.)
+          scopes: 'openid email profile',
         },
       });
       if (error) throw error;
