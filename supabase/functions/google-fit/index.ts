@@ -21,19 +21,28 @@ serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
+    
+    // Use the user's token to get their session (which contains provider_token)
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    });
+    
+    // Service role client for DB operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid user' }), {
+    const { data: { session }, error: sessionError } = await supabaseUser.auth.getSession();
+
+    if (sessionError || !session?.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    const user = session.user;
     const googleIdentity = user.identities?.find(i => i.provider === 'google');
     
     if (!googleIdentity) {
@@ -46,9 +55,9 @@ serve(async (req) => {
       });
     }
 
-    // Get provider token from identity data
-    const identityData = googleIdentity.identity_data;
-    const providerToken = identityData?.provider_token;
+    // Provider token is available in the session, not in identity_data
+    const providerToken = session.provider_token;
+    console.log('Provider token available:', !!providerToken);
 
     const { action, saveToDb } = await req.json();
     
@@ -61,7 +70,7 @@ serve(async (req) => {
     // If no provider token, return cached data from DB
     if (!providerToken) {
       console.log('No provider token, fetching cached data from DB');
-      const { data: cachedData } = await supabase
+      const { data: cachedData } = await supabaseAdmin
         .from('google_fit_data')
         .select('*')
         .eq('user_id', user.id)
@@ -156,7 +165,7 @@ serve(async (req) => {
         const calorieData = fitnessData.calories?.find((c: any) => c.date === stepData.date);
         const activityData = fitnessData.activities?.find((a: any) => a.date === stepData.date);
         
-        await supabase.from('google_fit_data').upsert({
+        await supabaseAdmin.from('google_fit_data').upsert({
           user_id: user.id,
           sync_date: stepData.date,
           steps: stepData.count,
