@@ -123,13 +123,25 @@ serve(async (req) => {
         }
       );
 
-      if (stepsResponse.ok) {
-        const stepsData = await stepsResponse.json();
-        fitnessData.steps = stepsData.bucket?.map((bucket: any) => ({
-          date: new Date(parseInt(bucket.startTimeMillis)).toISOString().split('T')[0],
-          count: bucket.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0
-        })) || [];
+      if (!stepsResponse.ok) {
+        const bodyText = await stepsResponse.text();
+        console.error('Google Fit steps fetch failed:', stepsResponse.status, bodyText);
+        return new Response(JSON.stringify({
+          error: 'Google Fit steps fetch failed',
+          message: 'Google refused the request. Please reconnect Google Fit to grant fitness permissions.',
+          status: stepsResponse.status,
+          details: bodyText,
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
+
+      const stepsData = await stepsResponse.json();
+      fitnessData.steps = stepsData.bucket?.map((bucket: any) => ({
+        date: new Date(parseInt(bucket.startTimeMillis)).toISOString().split('T')[0],
+        count: bucket.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0
+      })) || [];
     }
 
     if (action === 'calories' || action === 'all') {
@@ -150,13 +162,25 @@ serve(async (req) => {
         }
       );
 
-      if (caloriesResponse.ok) {
-        const caloriesData = await caloriesResponse.json();
-        fitnessData.calories = caloriesData.bucket?.map((bucket: any) => ({
-          date: new Date(parseInt(bucket.startTimeMillis)).toISOString().split('T')[0],
-          value: Math.round(bucket.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0)
-        })) || [];
+      if (!caloriesResponse.ok) {
+        const bodyText = await caloriesResponse.text();
+        console.error('Google Fit calories fetch failed:', caloriesResponse.status, bodyText);
+        return new Response(JSON.stringify({
+          error: 'Google Fit calories fetch failed',
+          message: 'Google refused the request. Please reconnect Google Fit to grant fitness permissions.',
+          status: caloriesResponse.status,
+          details: bodyText,
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
+
+      const caloriesData = await caloriesResponse.json();
+      fitnessData.calories = caloriesData.bucket?.map((bucket: any) => ({
+        date: new Date(parseInt(bucket.startTimeMillis)).toISOString().split('T')[0],
+        value: Math.round(bucket.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0)
+      })) || [];
     }
 
     // Save to database if requested
@@ -164,8 +188,8 @@ serve(async (req) => {
       for (const stepData of fitnessData.steps) {
         const calorieData = fitnessData.calories?.find((c: any) => c.date === stepData.date);
         const activityData = fitnessData.activities?.find((a: any) => a.date === stepData.date);
-        
-        await supabaseAdmin.from('google_fit_data').upsert({
+
+        const { error: upsertError } = await supabaseAdmin.from('google_fit_data').upsert({
           user_id: user.id,
           sync_date: stepData.date,
           steps: stepData.count,
@@ -173,6 +197,17 @@ serve(async (req) => {
           activity_segments: activityData?.segments || 0,
           synced_at: new Date().toISOString(),
         }, { onConflict: 'user_id,sync_date' });
+
+        if (upsertError) {
+          console.error('Failed saving Google Fit data row:', upsertError);
+          return new Response(JSON.stringify({
+            error: 'Failed to save fitness data',
+            message: upsertError.message,
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
       console.log('Google Fit data saved to DB for user:', user.id);
     }
