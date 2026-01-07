@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Footprints, Target, Trophy, Settings, X, Check, Flame, Zap } from 'lucide-react';
+import { Footprints, Target, Trophy, Settings, X, Check, Flame } from 'lucide-react';
 import { useGoogleFit } from '@/hooks/useGoogleFit';
 import { toast } from 'sonner';
 
@@ -13,7 +13,7 @@ interface StepGoalCardProps {
 }
 
 export function StepGoalCard({ onGoalReached }: StepGoalCardProps) {
-  const { data, isConnected } = useGoogleFit();
+  const { todaySteps, isConnected } = useGoogleFit();
   const [stepGoal, setStepGoal] = useState<number>(() => {
     const saved = localStorage.getItem('dailyStepGoal');
     return saved ? parseInt(saved, 10) : 10000;
@@ -21,59 +21,6 @@ export function StepGoalCard({ onGoalReached }: StepGoalCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempGoal, setTempGoal] = useState(stepGoal.toString());
   const [hasNotifiedGoal, setHasNotifiedGoal] = useState(false);
-
-  // Get today's steps from the data
-  const todaySteps = data?.steps?.find(s => {
-    const today = new Date().toISOString().split('T')[0];
-    return s.date === today;
-  })?.count || 0;
-
-  // Calculate step goal streak
-  const stepStreak = useMemo(() => {
-    if (!data?.steps || data.steps.length === 0) return { current: 0, longest: 0, daysReached: 0 };
-    
-    const sortedSteps = [...data.steps].sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    
-    let currentStreak = 0;
-    let longestStreak = 0;
-    let tempStreak = 0;
-    let daysReached = 0;
-    
-    // Count days goal was reached
-    sortedSteps.forEach(day => {
-      if (day.count >= stepGoal) daysReached++;
-    });
-    
-    // Calculate current streak (starting from today or yesterday)
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    
-    for (let i = 0; i < sortedSteps.length; i++) {
-      const day = sortedSteps[i];
-      // Start counting from today or yesterday
-      if (i === 0 && day.date !== today && day.date !== yesterday) break;
-      
-      if (day.count >= stepGoal) {
-        currentStreak++;
-      } else if (i > 0) {
-        break;
-      }
-    }
-    
-    // Calculate longest streak
-    sortedSteps.forEach((day) => {
-      if (day.count >= stepGoal) {
-        tempStreak++;
-        longestStreak = Math.max(longestStreak, tempStreak);
-      } else {
-        tempStreak = 0;
-      }
-    });
-    
-    return { current: currentStreak, longest: longestStreak, daysReached };
-  }, [data?.steps, stepGoal]);
 
   const progress = Math.min((todaySteps / stepGoal) * 100, 100);
   const isGoalReached = todaySteps >= stepGoal;
@@ -152,12 +99,6 @@ export function StepGoalCard({ onGoalReached }: StepGoalCardProps) {
             Daily Step Goal
           </CardTitle>
           <div className="flex items-center gap-2">
-            {stepStreak.current > 0 && (
-              <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30">
-                <Zap className="h-3 w-3 mr-1" />
-                {stepStreak.current} day streak
-              </Badge>
-            )}
             {isGoalReached ? (
               <Badge className="bg-green-500/20 text-green-600 border-green-500/30">
                 <Trophy className="h-3 w-3 mr-1" />
@@ -249,22 +190,6 @@ export function StepGoalCard({ onGoalReached }: StepGoalCardProps) {
                   <Target className="h-3 w-3" />
                   {stepGoal.toLocaleString()}
                 </span>
-              </div>
-            </div>
-
-            {/* Streak Stats */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/50">
-              <div className="text-center">
-                <p className="text-lg font-bold text-orange-500">{stepStreak.current}</p>
-                <p className="text-[10px] text-muted-foreground">Current Streak</p>
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-bold text-purple-500">{stepStreak.longest}</p>
-                <p className="text-[10px] text-muted-foreground">Best Streak</p>
-              </div>
-              <div className="text-center">
-                <p className="text-lg font-bold text-blue-500">{stepStreak.daysReached}</p>
-                <p className="text-[10px] text-muted-foreground">Goals Hit</p>
               </div>
             </div>
           </>

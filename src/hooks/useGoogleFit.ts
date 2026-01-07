@@ -3,28 +3,28 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
-interface FitnessData {
-  steps: Array<{ date: string; count: number }>;
-  calories: Array<{ date: string; value: number }>;
-  activities: Array<{ date: string; segments: number }>;
-}
-
 interface GoogleFitState {
-  data: FitnessData | null;
+  todaySteps: number;
+  todayCalories: number;
+  todayDate: string | null;
   loading: boolean;
   isConnected: boolean;
   lastSynced: Date | null;
   lastError: string | null;
+  cached: boolean;
 }
 
 export function useGoogleFit() {
   const { user, session } = useAuth();
   const [state, setState] = useState<GoogleFitState>({
-    data: null,
+    todaySteps: 0,
+    todayCalories: 0,
+    todayDate: null,
     loading: false,
     isConnected: false,
     lastSynced: null,
     lastError: null,
+    cached: false,
   });
 
   // Check if user has Google identity
@@ -44,27 +44,24 @@ export function useGoogleFit() {
     if (!user) return;
 
     try {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
+      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('google_fit_data')
         .select('*')
         .eq('user_id', user.id)
-        .gte('sync_date', sevenDaysAgo.toISOString().split('T')[0])
-        .order('sync_date', { ascending: true });
+        .eq('sync_date', today)
+        .maybeSingle();
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
+      if (data) {
         setState(prev => ({
           ...prev,
-          data: {
-            steps: data.map(d => ({ date: d.sync_date, count: d.steps })),
-            calories: data.map(d => ({ date: d.sync_date, value: d.calories })),
-            activities: data.map(d => ({ date: d.sync_date, segments: d.activity_segments })),
-          },
-          lastSynced: new Date(data[data.length - 1].synced_at),
+          todaySteps: data.steps ?? 0,
+          todayCalories: data.calories ?? 0,
+          todayDate: data.sync_date,
+          lastSynced: new Date(data.synced_at),
+          cached: true,
         }));
       }
     } catch (error) {
@@ -78,7 +75,7 @@ export function useGoogleFit() {
       return;
     }
 
-    setState(prev => ({ ...prev, loading: true }));
+    setState(prev => ({ ...prev, loading: true, lastError: null }));
 
     const getInvokeErrorMessage = (err: unknown) => {
       const anyErr = err as any;
@@ -95,16 +92,12 @@ export function useGoogleFit() {
     };
 
     try {
-      // Get the current session to check for provider_token
       const {
         data: { session: currentSession },
       } = await supabase.auth.getSession();
 
       const { data, error } = await supabase.functions.invoke('google-fit', {
         body: {
-          action: 'all',
-          saveToDb: true,
-          // Pass the provider token from the browser session
           providerToken: currentSession?.provider_token || null,
         },
       });
@@ -112,7 +105,7 @@ export function useGoogleFit() {
       if (error) {
         const message = getInvokeErrorMessage(error) || 'Failed to sync fitness data';
         console.error('Google Fit sync invoke error:', error);
-        setState(prev => ({ ...prev, lastError: message }));
+        setState(prev => ({ ...prev, lastError: message, loading: false }));
         if (!silent) toast.error(message);
         return;
       }
@@ -120,49 +113,40 @@ export function useGoogleFit() {
       // Only treat as error if there's an actual error flag
       if (data?.error) {
         const message = data.message || data.error;
-        setState(prev => ({ ...prev, lastError: message }));
+        setState(prev => ({ ...prev, lastError: message, loading: false }));
         if (!silent) toast.error(message);
         return;
       }
 
-      // Handle empty but successful response
-      const isEmpty = data?.empty || (data?.data?.steps?.length === 0 && data?.data?.calories?.length === 0);
-
+      // Update state with fetched data (always success, even 0 steps)
       setState(prev => ({
         ...prev,
-        data: data?.data ?? null,
+        todaySteps: data?.todaySteps ?? 0,
+        todayCalories: data?.todayCalories ?? 0,
+        todayDate: data?.todayDate ?? null,
         lastSynced: new Date(),
         lastError: null,
+        cached: data?.cached ?? false,
+        loading: false,
       }));
 
       if (!silent) {
-        if (isEmpty) {
-          toast.info('No fitness data found yet');
-        } else {
-          toast.success('Fitness data synced!');
-        }
+        const steps = data?.todaySteps ?? 0;
+        toast.success(`${steps.toLocaleString()} steps today!`);
       }
     } catch (error) {
       console.error('Error syncing fitness data:', error);
-
-      const message =
-        getInvokeErrorMessage(error) ||
-        'Failed to sync fitness data. Try reconnecting Google Fit.';
-
-      setState(prev => ({ ...prev, lastError: message }));
+      const message = getInvokeErrorMessage(error) || 'Failed to sync fitness data';
+      setState(prev => ({ ...prev, lastError: message, loading: false }));
       if (!silent) toast.error(message);
-    } finally {
-      setState(prev => ({ ...prev, loading: false }));
     }
   }, [session?.access_token, state.isConnected]);
 
-  // Auto-sync function to be called when habits are logged
   const triggerAutoSync = useCallback(() => {
     if (state.isConnected && !state.loading) {
-      // Only auto-sync if last sync was more than 5 minutes ago
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       if (!state.lastSynced || state.lastSynced < fiveMinutesAgo) {
-        syncData(true); // silent sync
+        syncData(true);
       }
     }
   }, [state.isConnected, state.loading, state.lastSynced, syncData]);
@@ -188,17 +172,10 @@ export function useGoogleFit() {
     }
   };
 
-  const totalSteps = state.data?.steps?.reduce((sum, d) => sum + d.count, 0) || 0;
-  const totalCalories = state.data?.calories?.reduce((sum, d) => sum + d.value, 0) || 0;
-  const avgSteps = state.data?.steps?.length ? Math.round(totalSteps / state.data.steps.length) : 0;
-
   return {
     ...state,
     syncData,
     triggerAutoSync,
     connectGoogleFit,
-    totalSteps,
-    totalCalories,
-    avgSteps,
   };
 }

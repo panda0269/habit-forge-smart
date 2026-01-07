@@ -3,21 +3,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Activity, Footprints, Flame, RefreshCw, Link2, Clock } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
 
 export function GoogleFitIntegration() {
   const {
-    data,
+    todaySteps,
+    todayCalories,
+    todayDate,
     loading,
     isConnected,
     lastSynced,
     lastError,
+    cached,
     syncData,
     connectGoogleFit,
-    totalSteps,
-    totalCalories,
-    avgSteps,
   } = useGoogleFit();
 
   return (
@@ -30,7 +29,7 @@ export function GoogleFitIntegration() {
             </div>
             <div>
               <CardTitle className="text-lg">Google Fit</CardTitle>
-              <CardDescription>Auto-syncs when you log habits</CardDescription>
+              <CardDescription>Today's fitness data</CardDescription>
             </div>
           </div>
           <Badge variant={isConnected ? 'default' : 'secondary'}>
@@ -46,7 +45,7 @@ export function GoogleFitIntegration() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-4">
-                Connect Google Fit to sync your steps, calories, and activity data
+                Connect Google Fit to sync your steps and calories
               </p>
               <Button onClick={connectGoogleFit}>
                 Connect Google Fit
@@ -56,12 +55,17 @@ export function GoogleFitIntegration() {
         ) : (
           <>
             <div className="flex items-center justify-between">
-              {lastSynced && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  Last synced {formatDistanceToNow(lastSynced, { addSuffix: true })}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {lastSynced && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {formatDistanceToNow(lastSynced, { addSuffix: true })}
+                  </span>
+                )}
+                {cached && (
+                  <Badge variant="outline" className="text-xs">Cached</Badge>
+                )}
+              </div>
               <Button variant="outline" size="sm" onClick={() => syncData()} disabled={loading}>
                 {loading ? (
                   <Loader2 className="animate-spin h-4 w-4" />
@@ -73,64 +77,33 @@ export function GoogleFitIntegration() {
             </div>
 
             {lastError && (
-              <div className="rounded-xl border bg-muted/40 px-3 py-2">
-                <p className="text-xs text-muted-foreground">Sync error</p>
-                <p className="text-sm">{lastError}</p>
+              <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2">
+                <p className="text-xs text-destructive font-medium">Sync error</p>
+                <p className="text-sm text-destructive/90">{lastError}</p>
               </div>
             )}
 
-            {data && (data.steps?.length > 0 || data.calories?.length > 0) ? (
-              <>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="p-3 rounded-xl bg-blue-500/10 text-center">
-                    <Footprints className="h-5 w-5 text-blue-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-blue-500">{totalSteps.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">Total Steps</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-orange-500/10 text-center">
-                    <Flame className="h-5 w-5 text-orange-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-orange-500">{totalCalories.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">Calories</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-green-500/10 text-center">
-                    <Activity className="h-5 w-5 text-green-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-green-500">{avgSteps.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">Avg/Day</p>
-                  </div>
-                </div>
-
-                {data.steps && data.steps.length > 0 && (
-                  <div className="h-48">
-                    <p className="text-sm font-medium mb-2">Steps (Last 7 Days)</p>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={data.steps}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis 
-                          dataKey="date" 
-                          tickFormatter={(d) => new Date(d).toLocaleDateString('en-US', { weekday: 'short' })}
-                          className="text-xs"
-                        />
-                        <YAxis className="text-xs" />
-                        <Tooltip 
-                          formatter={(value: number) => [value.toLocaleString(), 'Steps']}
-                          labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                        />
-                        <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+            {/* Today's Stats - Always show, even 0 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-blue-500/10 text-center">
+                <Footprints className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                <p className="text-3xl font-bold text-blue-500">{todaySteps.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground">Steps Today</p>
+                {todayDate && (
+                  <p className="text-xs text-muted-foreground mt-1">{todayDate}</p>
                 )}
-              </>
-            ) : (
-              <div className="text-center py-6 space-y-2">
-                <div className="p-3 rounded-full bg-muted w-fit mx-auto">
-                  <Footprints className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground">No fitness data yet</p>
-                <p className="text-xs text-muted-foreground">
-                  Click "Sync Now" to fetch your steps and calories from Google Fit
-                </p>
               </div>
+              <div className="p-4 rounded-xl bg-orange-500/10 text-center">
+                <Flame className="h-6 w-6 text-orange-500 mx-auto mb-2" />
+                <p className="text-3xl font-bold text-orange-500">{todayCalories.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground">Calories</p>
+              </div>
+            </div>
+
+            {todaySteps === 0 && !loading && !lastError && (
+              <p className="text-center text-xs text-muted-foreground">
+                No steps recorded yet today. Keep moving! 🚶
+              </p>
             )}
           </>
         )}
