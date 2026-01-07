@@ -14,6 +14,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { BehindScheduleAlert } from '@/components/BehindScheduleAlert';
 import { HabitAutomationPanel } from '@/components/HabitAutomationPanel';
 import { HabitTemplates } from '@/components/HabitTemplates';
+import { HabitCalendar } from '@/components/HabitCalendar';
 import { HabitCategory, HabitFrequency, HabitWithStats } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -232,6 +233,17 @@ export default function Index() {
             </div>
           )}
         </section>
+
+        {/* Habit Calendar */}
+        {habits.length > 0 && (
+          <section>
+            <h2 className="text-2xl font-display font-bold mb-4">📅 Calendar View</h2>
+            <HabitCalendar 
+              habits={habits} 
+              onToggleHabit={toggleHabitCompletion}
+            />
+          </section>
+        )}
 
         {/* Quick-Add Templates (when user has habits) */}
         {habits.length > 0 && (
