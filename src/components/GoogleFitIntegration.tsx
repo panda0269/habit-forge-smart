@@ -12,6 +12,7 @@ export function GoogleFitIntegration() {
     loading,
     isConnected,
     lastSynced,
+    lastError,
     syncData,
     connectGoogleFit,
     totalSteps,
@@ -70,6 +71,13 @@ export function GoogleFitIntegration() {
                 <span className="ml-2">Sync Now</span>
               </Button>
             </div>
+
+            {lastError && (
+              <div className="rounded-xl border bg-muted/40 px-3 py-2">
+                <p className="text-xs text-muted-foreground">Sync error</p>
+                <p className="text-sm">{lastError}</p>
+              </div>
+            )}
 
             {data ? (
               <>
