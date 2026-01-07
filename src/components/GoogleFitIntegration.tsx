@@ -13,7 +13,6 @@ export function GoogleFitIntegration() {
     loading,
     isConnected,
     lastSynced,
-    lastError,
     cached,
     syncData,
     connectGoogleFit,
@@ -63,7 +62,7 @@ export function GoogleFitIntegration() {
                   </span>
                 )}
                 {cached && (
-                  <Badge variant="outline" className="text-xs">Cached</Badge>
+                  <Badge variant="outline" className="text-xs">Synced</Badge>
                 )}
               </div>
               <Button variant="outline" size="sm" onClick={() => syncData()} disabled={loading}>
@@ -76,14 +75,7 @@ export function GoogleFitIntegration() {
               </Button>
             </div>
 
-            {lastError && (
-              <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-3 py-2">
-                <p className="text-xs text-destructive font-medium">Sync error</p>
-                <p className="text-sm text-destructive/90">{lastError}</p>
-              </div>
-            )}
-
-            {/* Today's Stats - Always show, even 0 */}
+            {/* Today's Stats - Always show */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-xl bg-blue-500/10 text-center">
                 <Footprints className="h-6 w-6 text-blue-500 mx-auto mb-2" />
@@ -99,12 +91,6 @@ export function GoogleFitIntegration() {
                 <p className="text-sm text-muted-foreground">Calories</p>
               </div>
             </div>
-
-            {todaySteps === 0 && !loading && !lastError && (
-              <p className="text-center text-xs text-muted-foreground">
-                No steps recorded yet today. Keep moving! 🚶
-              </p>
-            )}
           </>
         )}
       </CardContent>
