@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,17 +16,29 @@ export default function Auth() {
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/');
+    }
+  }, [authLoading, user, navigate]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
+      // If there's a stale/invalid refresh token in storage, it can break OAuth.
+      // Clear local auth state first; Google OAuth will establish a fresh session.
+      await supabase.auth.signOut();
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`,
-          scopes: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read',
+          // Land back on /auth so no protected page redirects can race the OAuth callback.
+          redirectTo: `${window.location.origin}/auth`,
+          scopes:
+            'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read',
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
