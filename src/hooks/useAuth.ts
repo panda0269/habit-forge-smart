@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { AuthApiError, Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 export function useAuth() {
@@ -59,7 +59,17 @@ export function useAuth() {
           setUser(session?.user ?? null);
           setLoading(false);
         }
-      } catch {
+      } catch (err) {
+        // If the browser has a stale refresh token (common after changing auth config),
+        // Supabase will throw refresh_token_not_found. Clear local auth state so OAuth can succeed.
+        if (err instanceof AuthApiError && err.code === 'refresh_token_not_found') {
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            // ignore
+          }
+        }
+
         if (!cancelled) setLoading(false);
       }
     })();
@@ -69,7 +79,6 @@ export function useAuth() {
       subscription.unsubscribe();
     };
   }, []);
-
   const signUp = async (email: string, password: string, displayName?: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
