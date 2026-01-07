@@ -5,11 +5,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Trophy, Medal, Award, Flame, Target, TrendingUp, Crown } from 'lucide-react';
 
 interface LeaderboardEntry {
   user_id: string;
   display_name: string;
+  avatar_url: string | null;
   total_habits: number;
   total_completions: number;
   best_streak: number;
@@ -106,9 +108,12 @@ export default function Leaderboard() {
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-gray-300 to-gray-400" />
               <CardContent className="pt-6 text-center">
                 <Medal className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center mx-auto mb-3 text-2xl font-bold">
-                  {leaderboard[1]?.display_name?.charAt(0).toUpperCase()}
-                </div>
+                <Avatar className="w-16 h-16 mx-auto mb-3 border-4 border-gray-300">
+                  <AvatarImage src={leaderboard[1]?.avatar_url || undefined} />
+                  <AvatarFallback className="bg-gradient-to-br from-gray-200 to-gray-300 text-2xl font-bold">
+                    {leaderboard[1]?.display_name?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
                 <h3 className="font-semibold truncate">{leaderboard[1]?.display_name}</h3>
                 <p className="text-2xl font-bold text-gray-500">{leaderboard[1]?.total_completions}</p>
                 <p className="text-xs text-muted-foreground">completions</p>
@@ -120,9 +125,12 @@ export default function Leaderboard() {
               <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 to-amber-500" />
               <CardContent className="pt-6 text-center">
                 <Crown className="w-14 h-14 text-yellow-500 mx-auto mb-2" />
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-300 to-amber-400 flex items-center justify-center mx-auto mb-3 text-3xl font-bold shadow-glow">
-                  {leaderboard[0]?.display_name?.charAt(0).toUpperCase()}
-                </div>
+                <Avatar className="w-20 h-20 mx-auto mb-3 border-4 border-yellow-400 shadow-glow">
+                  <AvatarImage src={leaderboard[0]?.avatar_url || undefined} />
+                  <AvatarFallback className="bg-gradient-to-br from-yellow-300 to-amber-400 text-3xl font-bold">
+                    {leaderboard[0]?.display_name?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
                 <h3 className="font-bold text-lg truncate">{leaderboard[0]?.display_name}</h3>
                 <p className="text-3xl font-bold text-yellow-600">{leaderboard[0]?.total_completions}</p>
                 <p className="text-sm text-muted-foreground">completions</p>
@@ -134,9 +142,12 @@ export default function Leaderboard() {
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-600" />
               <CardContent className="pt-6 text-center">
                 <Award className="w-12 h-12 text-amber-600 mx-auto mb-2" />
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mx-auto mb-3 text-2xl font-bold">
-                  {leaderboard[2]?.display_name?.charAt(0).toUpperCase()}
-                </div>
+                <Avatar className="w-16 h-16 mx-auto mb-3 border-4 border-amber-500">
+                  <AvatarImage src={leaderboard[2]?.avatar_url || undefined} />
+                  <AvatarFallback className="bg-gradient-to-br from-amber-400 to-orange-500 text-2xl font-bold">
+                    {leaderboard[2]?.display_name?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
                 <h3 className="font-semibold truncate">{leaderboard[2]?.display_name}</h3>
                 <p className="text-2xl font-bold text-amber-600">{leaderboard[2]?.total_completions}</p>
                 <p className="text-xs text-muted-foreground">completions</p>
@@ -178,11 +189,12 @@ export default function Leaderboard() {
                         {rank <= 3 ? getRankIcon(rank) : <span className="font-bold">{rank}</span>}
                       </div>
                       
-                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                        <span className="font-semibold text-primary">
+                      <Avatar className="w-10 h-10 border-2 border-primary/20">
+                        <AvatarImage src={entry.avatar_url || undefined} />
+                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                           {entry.display_name?.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
+                        </AvatarFallback>
+                      </Avatar>
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">

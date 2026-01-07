@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Home, BarChart3, FileText, Trophy, Settings, Sparkles, LogOut, Bell, CalendarCheck, Activity, Medal } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
@@ -5,6 +6,8 @@ import { useRewards } from '@/hooks/useRewards';
 import { useNotifications } from '@/hooks/useNotifications';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -19,6 +22,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { User } from '@supabase/supabase-js';
 
 const navItems = [
   { title: 'Dashboard', url: '/', icon: Home },
@@ -29,6 +33,40 @@ const navItems = [
   { title: 'Leaderboard', url: '/leaderboard', icon: Medal },
   { title: 'Rewards', url: '/rewards', icon: Trophy },
 ];
+
+function UserProfileSection({ user, rewards }: { user: User | null; rewards: { xp_points: number; level: number } | null }) {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (data) setAvatarUrl((data as any).avatar_url);
+    };
+    fetchProfile();
+  }, [user]);
+
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <Avatar className="w-8 h-8 border-2 border-primary/20">
+        <AvatarImage src={avatarUrl || undefined} />
+        <AvatarFallback className="bg-primary/20 text-primary text-sm font-medium">
+          {user?.email?.charAt(0).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{user?.email}</p>
+        <p className="text-xs text-muted-foreground">
+          {rewards ? `${rewards.xp_points} XP` : 'Loading...'}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export function AppSidebar() {
   const { signOut, user } = useAuth();
@@ -116,19 +154,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-sidebar-border">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-sm font-medium text-primary">
-              {user?.email?.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{user?.email}</p>
-            <p className="text-xs text-muted-foreground">
-              {rewards ? `${rewards.xp_points} XP` : 'Loading...'}
-            </p>
-          </div>
-        </div>
+        <UserProfileSection user={user} rewards={rewards} />
         <Button
           variant="ghost"
           size="sm"

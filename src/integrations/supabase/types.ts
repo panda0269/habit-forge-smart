@@ -346,6 +346,7 @@ export type Database = {
       get_leaderboard: {
         Args: never
         Returns: {
+          avatar_url: string
           avg_completion_rate: number
           best_streak: number
           display_name: string
