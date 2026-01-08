@@ -4,9 +4,10 @@ import { useAuth } from './useAuth';
 import { Habit, HabitLog, HabitWithStats, HabitCategory, HabitFrequency, UserCategory, XP_PER_COMPLETION, calculateLevel } from '@/lib/types';
 import { format, subDays, differenceInDays, startOfDay, parseISO } from 'date-fns';
 
-const DEMO_FIX_EMAIL = 'pandasyaysyo@gmail.com';
+// Demo accounts that need special treatment for accurate metrics display
+const DEMO_EMAILS = ['pandasaysyo@gmail.com', 'janwee12c@gmail.com'];
 const DEMO_FIX_START_DATE = startOfDay(parseISO('2025-12-01'));
-const DEMO_FIX_STORAGE_KEY = 'demo_metrics_fix_20251201_done';
+const DEMO_FIX_STORAGE_KEY = 'demo_metrics_fix_v2_done';
 
 export function useHabits() {
   const { user } = useAuth();
@@ -23,11 +24,12 @@ export function useHabits() {
 
     const habitCreatedDate = startOfDay(new Date(habit.created_at));
 
-    // Demo safety: for this specific user we compute "total days" starting from Dec 1, 2025.
+    // Demo safety: for demo accounts, we compute "total days" starting from Dec 1, 2025.
     // This avoids confusing demo states like a long active streak paired with a tiny % caused by
-    // very old habit creation dates.
+    // very old habit creation dates (e.g. created Dec 2024 = 400+ days ago).
+    const isDemoAccount = DEMO_EMAILS.includes(user?.email ?? '');
     const effectiveStartDate =
-      user?.email === DEMO_FIX_EMAIL && habitCreatedDate < DEMO_FIX_START_DATE
+      isDemoAccount && habitCreatedDate < DEMO_FIX_START_DATE
         ? DEMO_FIX_START_DATE
         : habitCreatedDate;
 
@@ -139,9 +141,10 @@ export function useHabits() {
 
       let logsData = logsResponse.data as HabitLog[];
 
-      // DEMO SAFETY: one-time correction pass for a specific user.
+      // DEMO SAFETY: one-time correction pass for demo accounts.
       // Removes duplicate completion rows for the same habit/day (Dec 1, 2025 -> today).
-      if (user.email === DEMO_FIX_EMAIL) {
+      const isDemoAccount = DEMO_EMAILS.includes(user.email ?? '');
+      if (isDemoAccount) {
         try {
           const alreadyDone = localStorage.getItem(DEMO_FIX_STORAGE_KEY) === '1';
           if (!alreadyDone) {
