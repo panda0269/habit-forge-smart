@@ -6,8 +6,9 @@ import { format, subDays, differenceInDays, startOfDay, parseISO } from 'date-fn
 
 // Demo accounts that need special treatment for accurate metrics display
 const DEMO_EMAILS = ['pandasaysyo@gmail.com', 'janwee12c@gmail.com'];
-const DEMO_FIX_START_DATE = startOfDay(parseISO('2025-12-01'));
-const DEMO_FIX_STORAGE_KEY = 'demo_metrics_fix_v2_done';
+// Use a more recent start date so completion % is higher for demo
+const DEMO_FIX_START_DATE = startOfDay(parseISO('2026-01-01'));
+const DEMO_FIX_STORAGE_KEY = 'demo_metrics_fix_v3_done';
 
 export function useHabits() {
   const { user } = useAuth();
