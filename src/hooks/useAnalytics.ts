@@ -1,6 +1,25 @@
 import { useMemo } from 'react';
 import { HabitWithStats, WeeklyData, MonthlyData, HabitLog } from '@/lib/types';
-import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval, eachWeekOfInterval, startOfMonth, endOfMonth, parseISO, isSameDay } from 'date-fns';
+import { format, subDays, endOfWeek, eachDayOfInterval, eachWeekOfInterval, startOfMonth, endOfMonth } from 'date-fns';
+
+function uniqueCompletedHabitsForDay(allLogs: HabitLog[], dateStr: string): number {
+  // Protect against duplicate habit_logs rows for the same habit/day.
+  const uniqueHabitIds = new Set(
+    allLogs
+      .filter((log) => log.completed_at === dateStr && log.completed)
+      .map((log) => log.habit_id)
+  );
+  return uniqueHabitIds.size;
+}
+
+function uniqueCompletionPairs(allLogs: HabitLog[]): number {
+  const pairs = new Set(
+    allLogs
+      .filter((log) => log.completed)
+      .map((log) => `${log.habit_id}|${log.completed_at}`)
+  );
+  return pairs.size;
+}
 
 export function useAnalytics(habits: HabitWithStats[], allLogs: HabitLog[]) {
   const weeklyData = useMemo((): WeeklyData[] => {
@@ -12,8 +31,7 @@ export function useAnalytics(habits: HabitWithStats[], allLogs: HabitLog[]) {
       const dateStr = format(date, 'yyyy-MM-dd');
       const dayName = format(date, 'EEE');
 
-      const logsForDay = allLogs.filter(log => log.completed_at === dateStr && log.completed);
-      const completed = logsForDay.length;
+      const completed = uniqueCompletedHabitsForDay(allLogs, dateStr);
       const total = habits.length;
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -31,18 +49,17 @@ export function useAnalytics(habits: HabitWithStats[], allLogs: HabitLog[]) {
 
     return weeks.map((weekStart, index) => {
       const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
-      const daysInWeek = eachDayOfInterval({ 
+      const daysInWeek = eachDayOfInterval({
         start: weekStart < monthStart ? monthStart : weekStart,
-        end: weekEnd > monthEnd ? monthEnd : weekEnd > today ? today : weekEnd
+        end: weekEnd > monthEnd ? monthEnd : weekEnd > today ? today : weekEnd,
       });
 
       let completed = 0;
       let total = 0;
 
-      daysInWeek.forEach(day => {
+      daysInWeek.forEach((day) => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const logsForDay = allLogs.filter(log => log.completed_at === dateStr && log.completed);
-        completed += logsForDay.length;
+        completed += uniqueCompletedHabitsForDay(allLogs, dateStr);
         total += habits.length;
       });
 
@@ -64,9 +81,8 @@ export function useAnalytics(habits: HabitWithStats[], allLogs: HabitLog[]) {
     for (let i = 29; i >= 0; i--) {
       const date = subDays(today, i);
       const dateStr = format(date, 'yyyy-MM-dd');
-      
-      const logsForDay = allLogs.filter(log => log.completed_at === dateStr && log.completed);
-      const completed = logsForDay.length;
+
+      const completed = uniqueCompletedHabitsForDay(allLogs, dateStr);
       const total = habits.length;
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -79,7 +95,7 @@ export function useAnalytics(habits: HabitWithStats[], allLogs: HabitLog[]) {
   const categoryBreakdown = useMemo(() => {
     const breakdown: Record<string, { completed: number; total: number; percentage: number }> = {};
 
-    habits.forEach(habit => {
+    habits.forEach((habit) => {
       if (!breakdown[habit.category]) {
         breakdown[habit.category] = { completed: 0, total: 0, percentage: 0 };
       }
@@ -87,23 +103,25 @@ export function useAnalytics(habits: HabitWithStats[], allLogs: HabitLog[]) {
       breakdown[habit.category].completed += habit.totalDays - habit.missedDays;
     });
 
-    Object.keys(breakdown).forEach(key => {
-      breakdown[key].percentage = breakdown[key].total > 0
-        ? Math.round((breakdown[key].completed / breakdown[key].total) * 100)
-        : 0;
+    Object.keys(breakdown).forEach((key) => {
+      breakdown[key].percentage =
+        breakdown[key].total > 0
+          ? Math.round((breakdown[key].completed / breakdown[key].total) * 100)
+          : 0;
     });
 
     return breakdown;
   }, [habits]);
 
   const overallStats = useMemo(() => {
-    const totalCompletions = allLogs.filter(log => log.completed).length;
-    const maxStreak = Math.max(...habits.map(h => h.longestStreak), 0);
-    const avgCompletionRate = habits.length > 0
-      ? Math.round(habits.reduce((sum, h) => sum + h.completionRate, 0) / habits.length)
-      : 0;
-    
-    const uniqueDates = new Set(allLogs.filter(log => log.completed).map(log => log.completed_at));
+    const totalCompletions = uniqueCompletionPairs(allLogs);
+    const maxStreak = Math.max(...habits.map((h) => h.longestStreak), 0);
+    const avgCompletionRate =
+      habits.length > 0
+        ? Math.round(habits.reduce((sum, h) => sum + h.completionRate, 0) / habits.length)
+        : 0;
+
+    const uniqueDates = new Set(allLogs.filter((log) => log.completed).map((log) => log.completed_at));
     const daysActive = uniqueDates.size;
 
     return {
@@ -123,3 +141,4 @@ export function useAnalytics(habits: HabitWithStats[], allLogs: HabitLog[]) {
     overallStats,
   };
 }
+

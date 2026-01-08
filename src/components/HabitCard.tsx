@@ -106,10 +106,10 @@ export function HabitCard({ habit, onToggle, onDelete, onEdit, style }: HabitCar
           </div>
         )}
 
-        {habit.completedToday && habit.reminder_time && (
+        {habit.completedToday && (
           <div className="flex items-center gap-2 text-xs mb-3 p-2 rounded-lg bg-primary/10 text-primary">
             <Check className="w-3.5 h-3.5" />
-            <span className="font-medium">Completed on time!</span>
+            <span className="font-medium">Completed on time</span>
           </div>
         )}
 
