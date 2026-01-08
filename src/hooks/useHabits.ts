@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { Habit, HabitLog, HabitWithStats, HabitCategory, HabitFrequency, UserCategory } from '@/lib/types';
+import { Habit, HabitLog, HabitWithStats, HabitCategory, HabitFrequency, UserCategory, XP_PER_COMPLETION, calculateLevel } from '@/lib/types';
 import { format, subDays, differenceInDays, startOfDay, parseISO } from 'date-fns';
+
+const DEMO_FIX_EMAIL = 'pandasyaysyo@gmail.com';
+const DEMO_FIX_START_DATE = startOfDay(parseISO('2025-12-01'));
+const DEMO_FIX_STORAGE_KEY = 'demo_metrics_fix_20251201_done';
 
 export function useHabits() {
   const { user } = useAuth();
@@ -15,30 +19,47 @@ export function useHabits() {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     // Single source of truth: derive everything from habit_logs
-    const habitLogs = logs.filter((log) => log.habit_id === habit.id && log.completed);
+    // (Note: completion is one-per-habit-per-day. Duplicate rows are deduped below.)
 
-    // IMPORTANT: A habit can only be completed once per day.
-    // If multiple logs exist for the same day, treat them as a single completion.
-    const uniqueCompletedDates = Array.from(
-      new Set(habitLogs.map((log) => log.completed_at))
+    const habitCreatedDate = startOfDay(new Date(habit.created_at));
+
+    // Demo safety: for this specific user we compute "total days" starting from Dec 1, 2025.
+    // This avoids confusing demo states like a long active streak paired with a tiny % caused by
+    // very old habit creation dates.
+    const effectiveStartDate =
+      user?.email === DEMO_FIX_EMAIL && habitCreatedDate < DEMO_FIX_START_DATE
+        ? DEMO_FIX_START_DATE
+        : habitCreatedDate;
+
+    const startDateStr = format(effectiveStartDate, 'yyyy-MM-dd');
+
+    const habitLogs = logs.filter(
+      (log) =>
+        log.habit_id === habit.id &&
+        log.completed &&
+        log.completed_at >= startDateStr
     );
+
+    // Deduplicate: treat multiple logs for the same day as one completion.
+    const uniqueCompletedDates = Array.from(new Set(habitLogs.map((log) => log.completed_at)));
 
     const completedToday = uniqueCompletedDates.includes(todayStr);
 
-    // Total tracked days: from habit creation date through today (inclusive)
-    const habitCreatedDate = startOfDay(new Date(habit.created_at));
-    const totalDays = Math.max(1, differenceInDays(new Date(), habitCreatedDate) + 1);
+    // Total tracked days: from effective start date through today (inclusive)
+    const totalDays = Math.max(1, differenceInDays(startOfDay(new Date()), effectiveStartDate) + 1);
 
     const completedDays = uniqueCompletedDates.length;
+
+    // Completion %: strictly 0..100
     const completionRate = Math.min(
       100,
       Math.max(0, Math.round((completedDays / totalDays) * 100))
     );
 
-    // Current streak: consecutive days ending today. If today not completed => 0.
+    // Current streak: consecutive completed days ending today. If today not completed => 0.
     let currentStreak = 0;
     if (completedToday) {
-      let checkDate = new Date();
+      let checkDate = startOfDay(new Date());
       while (true) {
         const dateStr = format(checkDate, 'yyyy-MM-dd');
         if (!uniqueCompletedDates.includes(dateStr)) break;
@@ -47,7 +68,7 @@ export function useHabits() {
       }
     }
 
-    // Longest streak: max historical consecutive run
+    // Longest streak: max historical consecutive run (within effective window)
     let longestStreak = 0;
     if (uniqueCompletedDates.length > 0) {
       const sortedAsc = [...uniqueCompletedDates].sort(
@@ -70,7 +91,7 @@ export function useHabits() {
       longestStreak = Math.max(longestStreak, run);
     }
 
-    // Disallow impossible states
+    // Disallow impossible states (math safety)
     currentStreak = Math.min(currentStreak, totalDays, completedDays);
     longestStreak = Math.min(longestStreak, totalDays, completedDays);
 
@@ -84,10 +105,11 @@ export function useHabits() {
       completionRate,
       missedDays,
       totalDays,
-      // keep the underlying logs for calendar + UI; duplicates won't affect correctness now
+      // keep underlying logs (already windowed); UI + analytics should derive from allLogs
       logs: habitLogs,
     };
-  }, []);
+  }, [user?.email]);
+
 
   const fetchHabits = useCallback(async () => {
     if (!user) {
@@ -115,10 +137,56 @@ export function useHabits() {
       if (habitsResponse.error) throw habitsResponse.error;
       if (logsResponse.error) throw logsResponse.error;
 
-      const logsData = logsResponse.data as HabitLog[];
+      let logsData = logsResponse.data as HabitLog[];
+
+      // DEMO SAFETY: one-time correction pass for a specific user.
+      // Removes duplicate completion rows for the same habit/day (Dec 1, 2025 -> today).
+      if (user.email === DEMO_FIX_EMAIL) {
+        try {
+          const alreadyDone = localStorage.getItem(DEMO_FIX_STORAGE_KEY) === '1';
+          if (!alreadyDone) {
+            const startStr = format(DEMO_FIX_START_DATE, 'yyyy-MM-dd');
+            const groups = new Map<string, HabitLog[]>();
+
+            for (const log of logsData) {
+              if (!log.completed) continue;
+              if (log.completed_at < startStr) continue;
+              const k = `${log.habit_id}|${log.completed_at}`;
+              const arr = groups.get(k);
+              if (arr) arr.push(log);
+              else groups.set(k, [log]);
+            }
+
+            const idsToDelete: string[] = [];
+            for (const [, arr] of groups) {
+              if (arr.length <= 1) continue;
+              arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+              for (let i = 1; i < arr.length; i++) idsToDelete.push(arr[i].id);
+            }
+
+            if (idsToDelete.length > 0) {
+              const { error: deleteError } = await supabase
+                .from('habit_logs')
+                .delete()
+                .in('id', idsToDelete);
+
+              if (deleteError) throw deleteError;
+
+              const idsSet = new Set(idsToDelete);
+              logsData = logsData.filter((l) => !idsSet.has(l.id));
+            }
+
+            localStorage.setItem(DEMO_FIX_STORAGE_KEY, '1');
+          }
+        } catch (e) {
+          // Non-fatal: continue without blocking dashboard rendering
+          console.warn('Demo correction pass failed:', e);
+        }
+      }
+
       setAllLogs(logsData);
 
-      const habitsWithStats = (habitsResponse.data as Habit[]).map(habit => 
+      const habitsWithStats = (habitsResponse.data as Habit[]).map((habit) =>
         calculateStats(habit, logsData)
       );
 
@@ -130,6 +198,7 @@ export function useHabits() {
       setLoading(false);
     }
   }, [user, calculateStats]);
+
 
   const createHabit = async (habitData: {
     title: string;
@@ -233,9 +302,10 @@ export function useHabits() {
 
   const toggleHabitCompletion = async (habitId: string, date?: string) => {
     if (!user) throw new Error('User not authenticated');
-    
-    const completedAt = date || format(new Date(), 'yyyy-MM-dd');
-    
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const completedAt = date || todayStr;
+
     // Check if log exists
     const { data: existingLog } = await supabase
       .from('habit_logs')
@@ -250,7 +320,7 @@ export function useHabits() {
         .from('habit_logs')
         .delete()
         .eq('id', existingLog.id);
-      
+
       if (error) throw error;
     } else {
       // Create new log (toggle on)
@@ -262,8 +332,34 @@ export function useHabits() {
           completed_at: completedAt,
           completed: true,
         });
-      
+
       if (error) throw error;
+
+      // XP: award only for completing *today* (no backfill / recalculation impact)
+      if (completedAt === todayStr) {
+        const { data: rewardsRow, error: rewardsReadError } = await supabase
+          .from('user_rewards')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!rewardsReadError) {
+          const currentXP = rewardsRow?.xp_points ?? 0;
+          const newXP = currentXP + XP_PER_COMPLETION;
+          const newLevel = calculateLevel(newXP);
+
+          if (!rewardsRow) {
+            await supabase
+              .from('user_rewards')
+              .insert({ user_id: user.id, xp_points: newXP, level: newLevel });
+          } else {
+            await supabase
+              .from('user_rewards')
+              .update({ xp_points: newXP, level: newLevel })
+              .eq('user_id', user.id);
+          }
+        }
+      }
     }
 
     await fetchHabits();
