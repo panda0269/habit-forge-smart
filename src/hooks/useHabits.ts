@@ -5,10 +5,12 @@ import { Habit, HabitLog, HabitWithStats, HabitCategory, HabitFrequency, UserCat
 import { format, subDays, differenceInDays, startOfDay, parseISO } from 'date-fns';
 
 // Demo accounts that need special treatment for accurate metrics display
-const DEMO_EMAILS = ['pandasaysyo@gmail.com', 'janwee12c@gmail.com'];
-// Use a more recent start date so completion % is higher for demo
-const DEMO_FIX_START_DATE = startOfDay(parseISO('2026-01-01'));
-const DEMO_FIX_STORAGE_KEY = 'demo_metrics_fix_v3_done';
+// (Used only to make demo numbers human-sane; does NOT affect XP awarding.)
+const DEMO_EMAILS = ['pandasyaysyo@gmail.com', 'janwee12c@gmail.com'];
+// Demo safety window per requirement: recompute metrics from Dec 1, 2025 -> today
+const DEMO_FIX_START_DATE = startOfDay(parseISO('2025-12-01'));
+// Bump key so the one-time cleanup runs again after logic changes
+const DEMO_FIX_STORAGE_KEY = 'demo_metrics_fix_v4_done';
 
 export function useHabits() {
   const { user } = useAuth();
