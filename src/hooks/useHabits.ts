@@ -12,55 +12,70 @@ export function useHabits() {
   const [error, setError] = useState<string | null>(null);
 
   const calculateStats = useCallback((habit: Habit, logs: HabitLog[]): HabitWithStats => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const habitLogs = logs.filter(log => log.habit_id === habit.id && log.completed);
-    const completedToday = habitLogs.some(log => log.completed_at === today);
-    
-    let currentStreak = 0;
-    let longestStreak = 0;
-    let tempStreak = 0;
-    
-    const sortedDates = habitLogs
-      .map(log => log.completed_at)
-      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-    
-    let checkDate = new Date();
-    for (let i = 0; i < 365; i++) {
-      const dateStr = format(checkDate, 'yyyy-MM-dd');
-      if (sortedDates.includes(dateStr)) {
-        currentStreak++;
-        checkDate = subDays(checkDate, 1);
-      } else if (i > 0) {
-        break;
-      } else {
-        checkDate = subDays(checkDate, 1);
-      }
-    }
-    
-    for (let i = 0; i < sortedDates.length; i++) {
-      if (i === 0) {
-        tempStreak = 1;
-      } else {
-        const diff = differenceInDays(
-          parseISO(sortedDates[i - 1]),
-          parseISO(sortedDates[i])
-        );
-        if (diff === 1) {
-          tempStreak++;
-        } else {
-          longestStreak = Math.max(longestStreak, tempStreak);
-          tempStreak = 1;
-        }
-      }
-    }
-    longestStreak = Math.max(longestStreak, tempStreak);
-    
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+    // Single source of truth: derive everything from habit_logs
+    const habitLogs = logs.filter((log) => log.habit_id === habit.id && log.completed);
+
+    // IMPORTANT: A habit can only be completed once per day.
+    // If multiple logs exist for the same day, treat them as a single completion.
+    const uniqueCompletedDates = Array.from(
+      new Set(habitLogs.map((log) => log.completed_at))
+    );
+
+    const completedToday = uniqueCompletedDates.includes(todayStr);
+
+    // Total tracked days: from habit creation date through today (inclusive)
     const habitCreatedDate = startOfDay(new Date(habit.created_at));
     const totalDays = Math.max(1, differenceInDays(new Date(), habitCreatedDate) + 1);
-    const completedDays = habitLogs.length;
-    const completionRate = Math.round((completedDays / totalDays) * 100);
-    const missedDays = totalDays - completedDays;
-    
+
+    const completedDays = uniqueCompletedDates.length;
+    const completionRate = Math.min(
+      100,
+      Math.max(0, Math.round((completedDays / totalDays) * 100))
+    );
+
+    // Current streak: consecutive days ending today. If today not completed => 0.
+    let currentStreak = 0;
+    if (completedToday) {
+      let checkDate = new Date();
+      while (true) {
+        const dateStr = format(checkDate, 'yyyy-MM-dd');
+        if (!uniqueCompletedDates.includes(dateStr)) break;
+        currentStreak++;
+        checkDate = subDays(checkDate, 1);
+      }
+    }
+
+    // Longest streak: max historical consecutive run
+    let longestStreak = 0;
+    if (uniqueCompletedDates.length > 0) {
+      const sortedAsc = [...uniqueCompletedDates].sort(
+        (a, b) => parseISO(a).getTime() - parseISO(b).getTime()
+      );
+
+      let run = 1;
+      longestStreak = 1;
+
+      for (let i = 1; i < sortedAsc.length; i++) {
+        const diff = differenceInDays(parseISO(sortedAsc[i]), parseISO(sortedAsc[i - 1]));
+        if (diff === 1) {
+          run++;
+        } else {
+          longestStreak = Math.max(longestStreak, run);
+          run = 1;
+        }
+      }
+
+      longestStreak = Math.max(longestStreak, run);
+    }
+
+    // Disallow impossible states
+    currentStreak = Math.min(currentStreak, totalDays, completedDays);
+    longestStreak = Math.min(longestStreak, totalDays, completedDays);
+
+    const missedDays = Math.max(0, totalDays - completedDays);
+
     return {
       ...habit,
       completedToday,
@@ -69,6 +84,7 @@ export function useHabits() {
       completionRate,
       missedDays,
       totalDays,
+      // keep the underlying logs for calendar + UI; duplicates won't affect correctness now
       logs: habitLogs,
     };
   }, []);
