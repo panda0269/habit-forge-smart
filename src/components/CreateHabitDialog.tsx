@@ -44,7 +44,29 @@ export function CreateHabitDialog({ open, onOpenChange, onHabitCreated }: Create
 
     setLoading(true);
     try {
-      // Create habit directly using supabase client
+      // Send to MERN backend
+      try {
+        const mernResponse = await fetch('http://localhost:5000/api/habits', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            title: title.trim(),
+            frequency,
+          }),
+        });
+
+        if (!mernResponse.ok) {
+          const errorData = await mernResponse.json().catch(() => ({}));
+          console.warn('MERN backend error:', errorData.error || 'Failed to create habit in MERN backend');
+        }
+      } catch (mernError) {
+        console.warn('MERN backend unavailable:', mernError);
+      }
+
+      // Create habit in Supabase (existing Lovable backend)
       const { error } = await supabase
         .from('habits')
         .insert({
