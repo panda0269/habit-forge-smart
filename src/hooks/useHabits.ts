@@ -239,6 +239,28 @@ export function useHabits() {
   };
 
   const updateHabit = async (id: string, habitData: Partial<Habit>) => {
+    // Send to MERN backend
+    try {
+      const mernResponse = await fetch(`http://localhost:5000/api/habits/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: habitData.title,
+          frequency: habitData.frequency,
+        }),
+      });
+
+      if (!mernResponse.ok) {
+        const errorData = await mernResponse.json().catch(() => ({}));
+        console.warn('MERN backend error:', errorData.error || 'Failed to update habit in MERN backend');
+      }
+    } catch (mernError) {
+      console.warn('MERN backend unavailable:', mernError);
+    }
+
+    // Update in Supabase (existing Lovable backend)
     const { error } = await supabase
       .from('habits')
       .update(habitData)
@@ -249,6 +271,21 @@ export function useHabits() {
   };
 
   const deleteHabit = async (id: string) => {
+    // Send to MERN backend
+    try {
+      const mernResponse = await fetch(`http://localhost:5000/api/habits/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!mernResponse.ok) {
+        const errorData = await mernResponse.json().catch(() => ({}));
+        console.warn('MERN backend error:', errorData.error || 'Failed to delete habit in MERN backend');
+      }
+    } catch (mernError) {
+      console.warn('MERN backend unavailable:', mernError);
+    }
+
+    // Delete from Supabase (existing Lovable backend)
     const { error } = await supabase
       .from('habits')
       .delete()
