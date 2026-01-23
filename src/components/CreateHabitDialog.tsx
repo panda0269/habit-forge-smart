@@ -9,7 +9,6 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { HabitCategory, HabitFrequency, CATEGORY_CONFIG, FREQUENCY_CONFIG } from '@/lib/types';
 import { toast } from 'sonner';
 import { Loader2, Bell, Clock } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
 interface CreateHabitDialogProps {
@@ -44,42 +43,27 @@ export function CreateHabitDialog({ open, onOpenChange, onHabitCreated }: Create
 
     setLoading(true);
     try {
-      // Send to MERN backend
-      try {
-        const mernResponse = await fetch('http://localhost:5000/api/habits', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: user.id,
-            title: title.trim(),
-            frequency,
-          }),
-        });
-
-        if (!mernResponse.ok) {
-          const errorData = await mernResponse.json().catch(() => ({}));
-          console.warn('MERN backend error:', errorData.error || 'Failed to create habit in MERN backend');
-        }
-      } catch (mernError) {
-        console.warn('MERN backend unavailable:', mernError);
-      }
-
-      // Create habit in Supabase (existing Lovable backend)
-      const { error } = await supabase
-        .from('habits')
-        .insert({
-          user_id: user.id,
+      // Create habit in MERN backend (MongoDB - single source of truth)
+      const mernResponse = await fetch('http://localhost:5000/api/habits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
           title: title.trim(),
           category,
           frequency,
           color: '#10B981',
-          reminder_enabled: reminderEnabled,
-          reminder_time: reminderEnabled ? reminderTime : null,
-        });
+          reminderEnabled,
+          reminderTime: reminderEnabled ? reminderTime : null,
+        }),
+      });
 
-      if (error) throw error;
+      if (!mernResponse.ok) {
+        const errorData = await mernResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create habit');
+      }
       
       toast.success('Habit created!');
       setTitle('');

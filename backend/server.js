@@ -5,6 +5,8 @@ require('dotenv').config();
 
 // Import routes
 const habitsRoutes = require('./routes/habits');
+const habitLogsRoutes = require('./routes/habitLogs');
+const statsRoutes = require('./routes/stats');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,6 +17,8 @@ app.use(express.json());
 
 // API Routes
 app.use('/api/habits', habitsRoutes);
+app.use('/api/habit-logs', habitLogsRoutes);
+app.use('/api/stats', statsRoutes);
 
 // MongoDB connection
 const connectDB = async () => {
