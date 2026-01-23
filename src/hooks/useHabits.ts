@@ -127,19 +127,42 @@ export function useHabits() {
       setLoading(true);
       setError(null);
 
-      const [habitsResponse, logsResponse] = await Promise.all([
-        supabase
-          .from('habits')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('habit_logs')
-          .select('*')
-          .eq('user_id', user.id),
-      ]);
+      // Fetch habits from MERN backend
+      let habitsData: Habit[] = [];
+      try {
+        const mernResponse = await fetch(`http://localhost:5000/api/habits/${user.id}`);
+        
+        if (!mernResponse.ok) {
+          const errorData = await mernResponse.json().catch(() => ({}));
+          console.warn('MERN backend error:', errorData.error || 'Failed to fetch habits from MERN backend');
+        } else {
+          const mernHabits = await mernResponse.json();
+          // Map MERN backend response to match expected Habit type
+          habitsData = mernHabits.map((habit: any) => ({
+            id: habit._id,
+            user_id: habit.userId,
+            title: habit.title,
+            description: habit.description || null,
+            category: habit.category || 'other',
+            frequency: habit.frequency || 'daily',
+            target_count: habit.targetCount || 1,
+            color: habit.color || '#10B981',
+            reminder_time: habit.reminderTime || null,
+            reminder_enabled: habit.reminderEnabled || false,
+            created_at: habit.createdAt,
+            updated_at: habit.updatedAt || habit.createdAt,
+          }));
+        }
+      } catch (mernError) {
+        console.warn('MERN backend unavailable:', mernError);
+      }
 
-      if (habitsResponse.error) throw habitsResponse.error;
+      // Fetch logs from Supabase (keeping Supabase for logs only)
+      const logsResponse = await supabase
+        .from('habit_logs')
+        .select('*')
+        .eq('user_id', user.id);
+
       if (logsResponse.error) throw logsResponse.error;
 
       let logsData = logsResponse.data as HabitLog[];
@@ -192,7 +215,7 @@ export function useHabits() {
 
       setAllLogs(logsData);
 
-      const habitsWithStats = (habitsResponse.data as Habit[]).map((habit) =>
+      const habitsWithStats = habitsData.map((habit) =>
         calculateStats(habit, logsData)
       );
 
