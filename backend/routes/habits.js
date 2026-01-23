@@ -1,20 +1,31 @@
 const express = require('express');
 const router = express.Router();
 const Habit = require('../models/Habit');
+const HabitLog = require('../models/HabitLog');
 
 // POST /api/habits - Create a new habit
 router.post('/', async (req, res) => {
   try {
-    const { userId, title, frequency } = req.body;
+    const { userId, title, description, category, frequency, color, reminderEnabled, reminderTime } = req.body;
 
     if (!userId || !title) {
       return res.status(400).json({ error: 'userId and title are required' });
     }
 
+    // Ignore test users
+    if (userId === 'testuser') {
+      return res.status(400).json({ error: 'Test users are not allowed' });
+    }
+
     const habit = new Habit({
       userId,
       title,
-      frequency: frequency || 'daily'
+      description: description || null,
+      category: category || 'other',
+      frequency: frequency || 'daily',
+      color: color || '#10B981',
+      reminderEnabled: reminderEnabled || false,
+      reminderTime: reminderTime || null,
     });
 
     const savedHabit = await habit.save();
@@ -28,6 +39,12 @@ router.post('/', async (req, res) => {
 router.get('/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+
+    // Ignore test users
+    if (userId === 'testuser') {
+      return res.json([]);
+    }
+
     const habits = await Habit.find({ userId }).sort({ createdAt: -1 });
     res.json(habits);
   } catch (error) {
@@ -39,11 +56,16 @@ router.get('/:userId', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, frequency } = req.body;
+    const { title, description, category, frequency, color, reminderEnabled, reminderTime } = req.body;
 
-    const updateFields = {};
+    const updateFields = { updatedAt: new Date() };
     if (title !== undefined) updateFields.title = title;
+    if (description !== undefined) updateFields.description = description;
+    if (category !== undefined) updateFields.category = category;
     if (frequency !== undefined) updateFields.frequency = frequency;
+    if (color !== undefined) updateFields.color = color;
+    if (reminderEnabled !== undefined) updateFields.reminderEnabled = reminderEnabled;
+    if (reminderTime !== undefined) updateFields.reminderTime = reminderTime;
 
     const updatedHabit = await Habit.findByIdAndUpdate(
       id,
@@ -64,7 +86,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/habits/:id - Delete a habit
+// DELETE /api/habits/:id - Delete a habit (also deletes associated logs)
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -74,6 +96,9 @@ router.delete('/:id', async (req, res) => {
     if (!deletedHabit) {
       return res.status(404).json({ error: 'Habit not found' });
     }
+
+    // Also delete associated habit logs
+    await HabitLog.deleteMany({ habitId: id });
 
     res.status(200).json({ message: 'Habit deleted successfully', habit: deletedHabit });
   } catch (error) {

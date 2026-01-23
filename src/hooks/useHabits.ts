@@ -4,14 +4,6 @@ import { useAuth } from './useAuth';
 import { Habit, HabitLog, HabitWithStats, HabitCategory, HabitFrequency, UserCategory, XP_PER_COMPLETION, calculateLevel } from '@/lib/types';
 import { format, subDays, differenceInDays, startOfDay, parseISO } from 'date-fns';
 
-// Demo accounts that need special treatment for accurate metrics display
-// (Used only to make demo numbers human-sane; does NOT affect XP awarding.)
-const DEMO_EMAILS = ['pandasyaysyo@gmail.com', 'janwee12c@gmail.com'];
-// Demo safety window per requirement: recompute metrics from Dec 1, 2025 -> today
-const DEMO_FIX_START_DATE = startOfDay(parseISO('2025-12-01'));
-// Bump key so the one-time cleanup runs again after logic changes
-const DEMO_FIX_STORAGE_KEY = 'demo_metrics_fix_v4_done';
-
 export function useHabits() {
   const { user } = useAuth();
   const [habits, setHabits] = useState<HabitWithStats[]>([]);
@@ -27,15 +19,8 @@ export function useHabits() {
 
     const habitCreatedDate = startOfDay(new Date(habit.created_at));
 
-    // Demo safety: for demo accounts, we compute "total days" starting from Dec 1, 2025.
-    // This avoids confusing demo states like a long active streak paired with a tiny % caused by
-    // very old habit creation dates (e.g. created Dec 2024 = 400+ days ago).
-    const isDemoAccount = DEMO_EMAILS.includes(user?.email ?? '');
-    const effectiveStartDate =
-      isDemoAccount && habitCreatedDate < DEMO_FIX_START_DATE
-        ? DEMO_FIX_START_DATE
-        : habitCreatedDate;
-
+    // Use habit creation date as the start for stats calculation
+    const effectiveStartDate = habitCreatedDate;
     const startDateStr = format(effectiveStartDate, 'yyyy-MM-dd');
 
     const habitLogs = logs.filter(
@@ -157,61 +142,32 @@ export function useHabits() {
         console.warn('MERN backend unavailable:', mernError);
       }
 
-      // Fetch logs from Supabase (keeping Supabase for logs only)
-      const logsResponse = await supabase
-        .from('habit_logs')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (logsResponse.error) throw logsResponse.error;
-
-      let logsData = logsResponse.data as HabitLog[];
-
-      // DEMO SAFETY: one-time correction pass for demo accounts.
-      // Removes duplicate completion rows for the same habit/day (Dec 1, 2025 -> today).
-      const isDemoAccount = DEMO_EMAILS.includes(user.email ?? '');
-      if (isDemoAccount) {
-        try {
-          const alreadyDone = localStorage.getItem(DEMO_FIX_STORAGE_KEY) === '1';
-          if (!alreadyDone) {
-            const startStr = format(DEMO_FIX_START_DATE, 'yyyy-MM-dd');
-            const groups = new Map<string, HabitLog[]>();
-
-            for (const log of logsData) {
-              if (!log.completed) continue;
-              if (log.completed_at < startStr) continue;
-              const k = `${log.habit_id}|${log.completed_at}`;
-              const arr = groups.get(k);
-              if (arr) arr.push(log);
-              else groups.set(k, [log]);
-            }
-
-            const idsToDelete: string[] = [];
-            for (const [, arr] of groups) {
-              if (arr.length <= 1) continue;
-              arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-              for (let i = 1; i < arr.length; i++) idsToDelete.push(arr[i].id);
-            }
-
-            if (idsToDelete.length > 0) {
-              const { error: deleteError } = await supabase
-                .from('habit_logs')
-                .delete()
-                .in('id', idsToDelete);
-
-              if (deleteError) throw deleteError;
-
-              const idsSet = new Set(idsToDelete);
-              logsData = logsData.filter((l) => !idsSet.has(l.id));
-            }
-
-            localStorage.setItem(DEMO_FIX_STORAGE_KEY, '1');
-          }
-        } catch (e) {
-          // Non-fatal: continue without blocking dashboard rendering
-          console.warn('Demo correction pass failed:', e);
+      // Fetch logs from MERN backend (MongoDB)
+      let logsData: HabitLog[] = [];
+      try {
+        const logsResponse = await fetch(`http://localhost:5000/api/habit-logs/${user.id}`);
+        
+        if (!logsResponse.ok) {
+          const errorData = await logsResponse.json().catch(() => ({}));
+          console.warn('MERN backend error fetching logs:', errorData.error || 'Failed to fetch habit logs');
+        } else {
+          const mernLogs = await logsResponse.json();
+          // Map MERN backend response to match expected HabitLog type
+          logsData = mernLogs.map((log: any) => ({
+            id: log._id,
+            habit_id: log.habitId,
+            user_id: log.userId,
+            completed_at: log.date,
+            completed: log.completed,
+            notes: log.notes || null,
+            created_at: log.createdAt,
+          }));
         }
+      } catch (logsError) {
+        console.warn('MERN backend unavailable for logs:', logsError);
       }
+
+      // Note: MongoDB has unique index on (habitId, date) so duplicates are prevented at DB level
 
       setAllLogs(logsData);
 
@@ -240,81 +196,71 @@ export function useHabits() {
   }) => {
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
-      .from('habits')
-      .insert({
-        user_id: user.id,
+    // Create habit in MERN backend (MongoDB - single source of truth)
+    const response = await fetch('http://localhost:5000/api/habits', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: user.id,
         title: habitData.title,
         description: habitData.description || null,
         category: habitData.category,
         frequency: habitData.frequency,
         color: habitData.color || '#10B981',
-        reminder_enabled: habitData.reminder_enabled || false,
-        reminder_time: habitData.reminder_time || null,
-      })
-      .select()
-      .single();
+        reminderEnabled: habitData.reminder_enabled || false,
+        reminderTime: habitData.reminder_time || null,
+      }),
+    });
 
-    if (error) throw error;
-    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to create habit');
+    }
+
+    const data = await response.json();
     await fetchHabits();
     return data;
   };
 
   const updateHabit = async (id: string, habitData: Partial<Habit>) => {
-    // Send to MERN backend
-    try {
-      const mernResponse = await fetch(`http://localhost:5000/api/habits/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: habitData.title,
-          frequency: habitData.frequency,
-        }),
-      });
+    // Update in MERN backend (MongoDB - single source of truth)
+    const response = await fetch(`http://localhost:5000/api/habits/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: habitData.title,
+        description: habitData.description,
+        category: habitData.category,
+        frequency: habitData.frequency,
+        color: habitData.color,
+        reminderEnabled: habitData.reminder_enabled,
+        reminderTime: habitData.reminder_time,
+      }),
+    });
 
-      if (!mernResponse.ok) {
-        const errorData = await mernResponse.json().catch(() => ({}));
-        console.warn('MERN backend error:', errorData.error || 'Failed to update habit in MERN backend');
-      }
-    } catch (mernError) {
-      console.warn('MERN backend unavailable:', mernError);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to update habit');
     }
 
-    // Update in Supabase (existing Lovable backend)
-    const { error } = await supabase
-      .from('habits')
-      .update(habitData)
-      .eq('id', id);
-
-    if (error) throw error;
     await fetchHabits();
   };
 
   const deleteHabit = async (id: string) => {
-    // Send to MERN backend
-    try {
-      const mernResponse = await fetch(`http://localhost:5000/api/habits/${id}`, {
-        method: 'DELETE',
-      });
+    // Delete from MERN backend (MongoDB - single source of truth)
+    const response = await fetch(`http://localhost:5000/api/habits/${id}`, {
+      method: 'DELETE',
+    });
 
-      if (!mernResponse.ok) {
-        const errorData = await mernResponse.json().catch(() => ({}));
-        console.warn('MERN backend error:', errorData.error || 'Failed to delete habit in MERN backend');
-      }
-    } catch (mernError) {
-      console.warn('MERN backend unavailable:', mernError);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to delete habit');
     }
 
-    // Delete from Supabase (existing Lovable backend)
-    const { error } = await supabase
-      .from('habits')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
     await fetchHabits();
   };
 
@@ -336,31 +282,40 @@ export function useHabits() {
     const primaryHabit = habitsToMerge[0];
     const color = primaryHabit?.color || '#10B981';
 
-    // Create the new merged habit
-    const { data: newHabit, error: createError } = await supabase
-      .from('habits')
-      .insert({
-        user_id: user.id,
+    // Create the new merged habit in MERN backend
+    const createResponse = await fetch('http://localhost:5000/api/habits', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: user.id,
         title: newHabitData.title,
         description: newHabitData.description || `Merged from: ${habitsToMerge.map(h => h.title).join(', ')}`,
         category: newHabitData.category,
         frequency: 'daily',
         color,
-        reminder_enabled: habitsToMerge.some(h => h.reminder_enabled),
-        reminder_time: habitsToMerge.find(h => h.reminder_time)?.reminder_time || null,
-      })
-      .select()
-      .single();
+        reminderEnabled: habitsToMerge.some(h => h.reminder_enabled),
+        reminderTime: habitsToMerge.find(h => h.reminder_time)?.reminder_time || null,
+      }),
+    });
 
-    if (createError) throw createError;
+    if (!createResponse.ok) {
+      const errorData = await createResponse.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to create merged habit');
+    }
 
-    // Delete the old habits
-    const { error: deleteError } = await supabase
-      .from('habits')
-      .delete()
-      .in('id', habitIds);
+    const newHabit = await createResponse.json();
 
-    if (deleteError) throw deleteError;
+    // Delete the old habits from MERN backend
+    await Promise.all(habitIds.map(async (habitId) => {
+      const deleteResponse = await fetch(`http://localhost:5000/api/habits/${habitId}`, {
+        method: 'DELETE',
+      });
+      if (!deleteResponse.ok) {
+        console.warn(`Failed to delete habit ${habitId} during merge`);
+      }
+    }));
 
     await fetchHabits();
     return newHabit;
@@ -372,37 +327,29 @@ export function useHabits() {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const completedAt = date || todayStr;
 
-    // Check if log exists
-    const { data: existingLog } = await supabase
-      .from('habit_logs')
-      .select('*')
-      .eq('habit_id', habitId)
-      .eq('completed_at', completedAt)
-      .maybeSingle();
+    try {
+      // Toggle via MERN backend (MongoDB)
+      const response = await fetch('http://localhost:5000/api/habit-logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          habitId,
+          userId: user.id,
+          date: completedAt,
+        }),
+      });
 
-    if (existingLog) {
-      // Delete the log (toggle off)
-      const { error } = await supabase
-        .from('habit_logs')
-        .delete()
-        .eq('id', existingLog.id);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to toggle habit completion');
+      }
 
-      if (error) throw error;
-    } else {
-      // Create new log (toggle on)
-      const { error } = await supabase
-        .from('habit_logs')
-        .insert({
-          habit_id: habitId,
-          user_id: user.id,
-          completed_at: completedAt,
-          completed: true,
-        });
+      const result = await response.json();
 
-      if (error) throw error;
-
-      // XP: award only for completing *today* (no backfill / recalculation impact)
-      if (completedAt === todayStr) {
+      // XP: award only for completing *today* (not for deletions or backfill)
+      if (result.action === 'created' && completedAt === todayStr) {
         const { data: rewardsRow, error: rewardsReadError } = await supabase
           .from('user_rewards')
           .select('*')
@@ -426,6 +373,9 @@ export function useHabits() {
           }
         }
       }
+    } catch (mernError) {
+      console.warn('MERN backend error toggling completion:', mernError);
+      throw mernError;
     }
 
     await fetchHabits();
