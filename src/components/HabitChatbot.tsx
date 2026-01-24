@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { aiApi } from '@/lib/api';
 import { HabitWithStats, UserCategory } from '@/lib/types';
 import { Send, Loader2, Bot, User, Sparkles, Mic, MicOff, Volume2, VolumeX, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -151,16 +151,7 @@ export function HabitChatbot({ habits, userCategory }: HabitChatbotProps) {
         content: m.content,
       }));
 
-      const { data, error } = await supabase.functions.invoke('habit-chat', {
-        body: {
-          message: messageText.trim(),
-          habitContext,
-          conversationHistory,
-          userCategory,
-        },
-      });
-
-      if (error) throw error;
+      const data = await aiApi.chat(messageText.trim(), habitContext, conversationHistory, userCategory);
 
       const assistantMessage: Message = {
         role: 'assistant',

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, Image as ImageIcon, Sparkles, RefreshCw } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 interface AIMotivationalImageProps {
   habitTitle?: string;
@@ -18,11 +19,15 @@ export function AIMotivationalImage({ habitTitle, category, mood = 'encouraging'
   const generateImage = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('ai-generate-image', {
-        body: { habitTitle, category, mood },
+      const response = await fetch(`${API_URL}/api/ai/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ habitTitle, category, mood }),
       });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to generate image');
+      
+      const data = await response.json();
       
       if (data.imageUrl) {
         setImageUrl(data.imageUrl);

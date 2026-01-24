@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { supabase } from '@/integrations/supabase/client';
+import { aiApi } from '@/lib/api';
 import { HabitWithStats, UserCategory, CATEGORY_CONFIG } from '@/lib/types';
 import { Sparkles, Loader2, RefreshCw, Brain, TrendingUp, Target, MessageSquare, BarChart3, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -103,11 +103,7 @@ export function AIRecommendations({ habits, userCategory, triggerCount = 0 }: AI
 
       const apiType = type === 'suggestions' ? 'recommendations' : type;
 
-      const { data, error } = await supabase.functions.invoke('ai-recommendations', {
-        body: { habits: habitData, userCategory, analysisType: apiType },
-      });
-
-      if (error) throw error;
+      const data = await aiApi.getRecommendations(habitData, userCategory, apiType);
       
       setAnalyses(prev => ({
         ...prev,

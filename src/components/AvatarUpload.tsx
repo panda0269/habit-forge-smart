@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { authApi } from '@/lib/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Camera, Loader2 } from 'lucide-react';
@@ -33,32 +33,26 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, size = 'md' }
       }
 
       const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${user?.id}/${Date.now()}.${fileExt}`;
-
-      // Upload file to storage
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      // Update profile with new avatar URL
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl } as any)
-        .eq('id', user?.id);
-
-      if (updateError) throw updateError;
-
-      setAvatarUrl(publicUrl);
-      onUploadComplete?.(publicUrl);
-      toast.success('Avatar updated successfully!');
+      
+      // Convert file to base64 for simple upload
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const base64 = reader.result as string;
+          
+          // Update profile with avatar URL (base64 data URL for now)
+          // In production, you'd upload to a file storage service
+          const { user: updatedUser } = await authApi.updateProfile({ avatarUrl: base64 });
+          
+          setAvatarUrl(base64);
+          onUploadComplete?.(base64);
+          toast.success('Avatar updated successfully!');
+        } catch (error) {
+          console.error('Error updating profile:', error);
+          toast.error('Failed to upload avatar');
+        }
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
       console.error('Error uploading avatar:', error);
       toast.error('Failed to upload avatar');
