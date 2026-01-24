@@ -18,15 +18,40 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // CORS configuration for production
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || '*',
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:8080',
+  'https://habit-forge-smart.vercel.app',
+  'https://habit-forge-smart-4iu5w1nec-nishants-projects-e0b7db68.vercel.app',
+  /^https:\/\/habit-forge-smart-.*\.vercel\.app$/,  // All Vercel preview URLs
+];
+
+// Middleware
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return allowed === origin;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-};
-
-// Middleware
-app.use(cors(corsOptions));
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
