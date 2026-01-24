@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { aiApi } from '@/lib/api';
 import { HabitWithStats, UserCategory } from '@/lib/types';
 import { format } from 'date-fns';
 
@@ -81,16 +81,7 @@ export function useHabitAutomation(habits: HabitWithStats[], userCategory: UserC
         }))
       }));
 
-      const { data, error: fnError } = await supabase.functions.invoke('habit-automation', {
-        body: {
-          habits: habitData,
-          userCategory,
-          currentTime,
-          dayOfWeek
-        }
-      });
-
-      if (fnError) throw fnError;
+      const data = await aiApi.getAutomation(habitData, userCategory, currentTime, dayOfWeek);
 
       setResult(data);
       setLastRunTime(now);
@@ -101,12 +92,6 @@ export function useHabitAutomation(habits: HabitWithStats[], userCategory: UserC
       setLoading(false);
     }
   }, [habits, userCategory, lastRunTime]);
-
-  // Removed auto-run on mount - automation now only runs on meaningful events like:
-  // - habit completed
-  // - habit missed
-  // - streak breaks
-  // - weekly summary requested
 
   return {
     result,
