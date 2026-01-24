@@ -11,27 +11,20 @@ router.post('/recommendations', auth, async (req, res) => {
     const { habits, userCategory, analysisType } = req.body;
 
     // Check for API key
-    const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
     
-    if (!apiKey) {
-      // Return a helpful message if no API key is configured
-      return res.json({
-        recommendations: generateFallbackRecommendations(habits, userCategory, analysisType)
-      });
-    }
-
-    // If using Gemini
-    if (process.env.GEMINI_API_KEY) {
-      const response = await callGeminiAPI(habits, userCategory, analysisType);
+    if (geminiKey) {
+      const response = await callGeminiRecommendations(habits, userCategory, analysisType, geminiKey);
       return res.json({ recommendations: response });
     }
 
-    // If using OpenAI
-    if (process.env.OPENAI_API_KEY) {
-      const response = await callOpenAIAPI(habits, userCategory, analysisType);
+    if (openaiKey) {
+      const response = await callOpenAIRecommendations(habits, userCategory, analysisType, openaiKey);
       return res.json({ recommendations: response });
     }
 
+    // Fallback when no API key is configured
     res.json({
       recommendations: generateFallbackRecommendations(habits, userCategory, analysisType)
     });
@@ -46,15 +39,20 @@ router.post('/chat', auth, async (req, res) => {
   try {
     const { message, habitContext, conversationHistory, userCategory } = req.body;
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
     
-    if (!apiKey) {
-      return res.json({
-        reply: generateFallbackChatResponse(message, habitContext, userCategory)
-      });
+    if (geminiKey) {
+      const response = await callGeminiChat(message, habitContext, conversationHistory, userCategory, geminiKey);
+      return res.json({ reply: response });
     }
 
-    // Implement actual AI chat here when API key is available
+    if (openaiKey) {
+      const response = await callOpenAIChat(message, habitContext, conversationHistory, userCategory, openaiKey);
+      return res.json({ reply: response });
+    }
+
+    // Fallback when no API key is configured
     res.json({
       reply: generateFallbackChatResponse(message, habitContext, userCategory)
     });
@@ -78,7 +76,244 @@ router.post('/automation', auth, async (req, res) => {
   }
 });
 
-// Fallback functions when no API key is configured
+// POST /api/ai/generate-image - Generate motivational image
+router.post('/generate-image', auth, async (req, res) => {
+  try {
+    const { prompt, style } = req.body;
+
+    const openaiKey = process.env.OPENAI_API_KEY;
+    
+    if (openaiKey) {
+      const imageUrl = await generateImageWithOpenAI(prompt, style, openaiKey);
+      return res.json({ imageUrl, generated: true });
+    }
+
+    // Fallback: return placeholder image info
+    res.json({
+      imageUrl: null,
+      generated: false,
+      message: 'Image generation requires an OpenAI API key. Configure OPENAI_API_KEY in your .env file.',
+      fallbackPrompt: prompt
+    });
+  } catch (error) {
+    console.error('AI image generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// AI API Integration Functions
+// ============================================
+
+async function callGeminiRecommendations(habits, userCategory, analysisType, apiKey) {
+  try {
+    const habitSummary = habits.map(h => ({
+      title: h.title,
+      category: h.category,
+      completionRate: h.completionRate,
+      currentStreak: h.currentStreak,
+      longestStreak: h.longestStreak
+    }));
+
+    const prompt = `You are an expert habit coach. Analyze these habits and provide personalized recommendations.
+
+User Category: ${userCategory} (consistent = 80%+ completion, improving = 50-80%, inconsistent = below 50%)
+Analysis Type: ${analysisType || 'general'}
+
+Habits:
+${JSON.stringify(habitSummary, null, 2)}
+
+Provide specific, actionable recommendations in a friendly, encouraging tone. Focus on:
+1. What's working well
+2. Areas for improvement
+3. Specific strategies for the user's category
+4. One micro-habit suggestion
+
+Keep response under 300 words.`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 500
+        }
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      return data.candidates[0].content.parts[0].text;
+    }
+
+    return generateFallbackRecommendations(habits, userCategory, analysisType);
+  } catch (error) {
+    console.error('Gemini API error:', error);
+    return generateFallbackRecommendations(habits, userCategory, analysisType);
+  }
+}
+
+async function callOpenAIRecommendations(habits, userCategory, analysisType, apiKey) {
+  try {
+    const habitSummary = habits.map(h => ({
+      title: h.title,
+      category: h.category,
+      completionRate: h.completionRate,
+      currentStreak: h.currentStreak
+    }));
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert habit coach. Provide personalized, actionable recommendations in a friendly, encouraging tone.'
+          },
+          {
+            role: 'user',
+            content: `User Category: ${userCategory}. Habits: ${JSON.stringify(habitSummary)}. Provide specific recommendations.`
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.choices && data.choices[0]?.message?.content) {
+      return data.choices[0].message.content;
+    }
+
+    return generateFallbackRecommendations(habits, userCategory, analysisType);
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    return generateFallbackRecommendations(habits, userCategory, analysisType);
+  }
+}
+
+async function callGeminiChat(message, habitContext, conversationHistory, userCategory, apiKey) {
+  try {
+    const systemPrompt = `You are Sage, a wise and encouraging habit coach. Help users build better habits with practical advice and motivation.
+
+User's habit context: ${JSON.stringify(habitContext || {})}
+User category: ${userCategory}
+
+Recent conversation:
+${(conversationHistory || []).slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')}
+
+Respond helpfully in under 150 words.`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `${systemPrompt}\n\nUser: ${message}` }] }],
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 300
+        }
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      return data.candidates[0].content.parts[0].text;
+    }
+
+    return generateFallbackChatResponse(message, habitContext, userCategory);
+  } catch (error) {
+    console.error('Gemini chat error:', error);
+    return generateFallbackChatResponse(message, habitContext, userCategory);
+  }
+}
+
+async function callOpenAIChat(message, habitContext, conversationHistory, userCategory, apiKey) {
+  try {
+    const messages = [
+      {
+        role: 'system',
+        content: `You are Sage, a wise habit coach. User category: ${userCategory}. Context: ${JSON.stringify(habitContext || {})}`
+      },
+      ...(conversationHistory || []).slice(-4).map(m => ({
+        role: m.role,
+        content: m.content
+      })),
+      { role: 'user', content: message }
+    ];
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages,
+        max_tokens: 300,
+        temperature: 0.8
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.choices && data.choices[0]?.message?.content) {
+      return data.choices[0].message.content;
+    }
+
+    return generateFallbackChatResponse(message, habitContext, userCategory);
+  } catch (error) {
+    console.error('OpenAI chat error:', error);
+    return generateFallbackChatResponse(message, habitContext, userCategory);
+  }
+}
+
+async function generateImageWithOpenAI(prompt, style, apiKey) {
+  try {
+    const enhancedPrompt = `${prompt}. Style: ${style || 'motivational, inspiring, minimalist design'}`;
+
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: enhancedPrompt,
+        n: 1,
+        size: '1024x1024',
+        quality: 'standard'
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.data && data.data[0]?.url) {
+      return data.data[0].url;
+    }
+
+    throw new Error('Failed to generate image');
+  } catch (error) {
+    console.error('OpenAI image generation error:', error);
+    throw error;
+  }
+}
+
+// ============================================
+// Fallback Functions (No API Key)
+// ============================================
 
 function generateFallbackRecommendations(habits, userCategory, analysisType) {
   if (!habits || habits.length === 0) {
@@ -129,6 +364,10 @@ function generateFallbackChatResponse(message, habitContext, userCategory) {
     return "Building streaks is powerful! Try these tips: 1) Never miss twice in a row, 2) Do your habits at the same time each day, 3) Use habit stacking (after X, I will Y), 4) Make it obvious - put visual reminders everywhere, 5) Celebrate small wins! 🔥";
   }
   
+  if (lowerMessage.includes('help') || lowerMessage.includes('tip') || lowerMessage.includes('advice')) {
+    return "Here are my top habit-building tips: 1) Start incredibly small (2-minute versions), 2) Attach new habits to existing ones, 3) Design your environment for success, 4) Track your progress visually, 5) Reward yourself after each completion. What specific habit would you like help with? 🎯";
+  }
+  
   return "That's a great question! Building habits takes time and patience. Focus on consistency over perfection, make your habits small enough to never skip, and remember that every completed habit is a vote for the person you want to become. What specific habit would you like to work on? 🎯";
 }
 
@@ -137,33 +376,45 @@ function generateAutomationSuggestions(habits, userCategory, currentTime, dayOfW
   const insights = [];
 
   // Analyze habits for automation suggestions
-  habits.forEach(habit => {
-    if (habit.completionRate < 30) {
-      autoUpdates.push({
-        habitId: habit.id,
-        habitTitle: habit.title,
-        action: 'simplify',
-        reason: 'Low completion rate suggests this habit might be too ambitious',
-        severity: 'warning'
-      });
-    }
-    
-    if (habit.currentStreak === 0 && habit.longestStreak > 7) {
-      autoUpdates.push({
-        habitId: habit.id,
-        habitTitle: habit.title,
-        action: 'encourage',
-        reason: 'You had a great streak going! Time to restart.',
-        severity: 'info'
-      });
-    }
-  });
+  if (habits && habits.length > 0) {
+    habits.forEach(habit => {
+      if (habit.completionRate < 30) {
+        autoUpdates.push({
+          habitId: habit.id,
+          habitTitle: habit.title,
+          action: 'simplify',
+          reason: 'Low completion rate suggests this habit might be too ambitious',
+          severity: 'warning'
+        });
+      }
+      
+      if (habit.currentStreak === 0 && habit.longestStreak > 7) {
+        autoUpdates.push({
+          habitId: habit.id,
+          habitTitle: habit.title,
+          action: 'encourage',
+          reason: 'You had a great streak going! Time to restart.',
+          severity: 'info'
+        });
+      }
+
+      if (habit.completionRate > 90 && habit.currentStreak > 14) {
+        autoUpdates.push({
+          habitId: habit.id,
+          habitTitle: habit.title,
+          action: 'challenge',
+          reason: 'You\'ve mastered this habit! Consider increasing the difficulty.',
+          severity: 'success'
+        });
+      }
+    });
+  }
 
   // Generate a micro habit suggestion
   const microHabit = {
     title: 'Take 3 deep breaths',
     duration: '30 seconds',
-    relatedHabit: habits[0]?.title || null,
+    relatedHabit: habits && habits[0]?.title || null,
     actionSteps: ['Breathe in for 4 seconds', 'Hold for 4 seconds', 'Breathe out for 4 seconds'],
     bestTime: 'When you wake up',
     motivation: 'Start your day with clarity and calm'
@@ -175,12 +426,16 @@ function generateAutomationSuggestions(habits, userCategory, currentTime, dayOfW
     reasoning: userCategory === 'consistent' 
       ? 'Your habits are on track. Keep the momentum going!'
       : 'Simplify your routine to build consistency first.',
-    impactedHabits: habits.slice(0, 3).map(h => h.title),
+    impactedHabits: habits ? habits.slice(0, 3).map(h => h.title) : [],
     confidence: 0.75
   };
 
   insights.push('Remember: consistency beats intensity.');
   insights.push('Small habits compound into big results over time.');
+  
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    insights.push('Weekends are great for reviewing and planning your habits!');
+  }
 
   return {
     autoUpdates,
@@ -188,17 +443,6 @@ function generateAutomationSuggestions(habits, userCategory, currentTime, dayOfW
     systemDecision,
     insights
   };
-}
-
-// Placeholder for actual API calls (implement when API keys are available)
-async function callGeminiAPI(habits, userCategory, analysisType) {
-  // Implement Gemini API call
-  return generateFallbackRecommendations(habits, userCategory, analysisType);
-}
-
-async function callOpenAIAPI(habits, userCategory, analysisType) {
-  // Implement OpenAI API call
-  return generateFallbackRecommendations(habits, userCategory, analysisType);
 }
 
 module.exports = router;
