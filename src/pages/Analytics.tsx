@@ -11,7 +11,7 @@ import { CATEGORY_CONFIG, UserCategory } from '@/lib/types';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AppLayout } from '@/components/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
+import { aiApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function Analytics() {
@@ -48,11 +48,7 @@ export default function Analytics() {
         completedToday: h.completedToday,
       }));
 
-      const { data, error } = await supabase.functions.invoke('ai-recommendations', {
-        body: { habits: habitData, userCategory, analysisType: 'insights' },
-      });
-
-      if (error) throw error;
+      const data = await aiApi.getRecommendations(habitData, userCategory, 'insights');
       setAiInsights(data.recommendations);
     } catch (err) {
       console.error('Error fetching AI insights:', err);

@@ -14,7 +14,7 @@ import { format, subDays, startOfWeek, endOfWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AppLayout } from '@/components/AppLayout';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { reflectionsApi } from '@/lib/api';
 
 export default function WeeklyReview() {
   const { user, loading: authLoading } = useAuth();
@@ -46,19 +46,12 @@ export default function WeeklyReview() {
       if (!user) return;
       
       try {
-        const { data, error } = await supabase
-          .from('weekly_reflections')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('week_start', weekStartStr)
-          .maybeSingle();
-
-        if (error) throw error;
+        const data = await reflectionsApi.get(weekStartStr);
 
         if (data) {
-          setWins(data.what_worked || '');
-          setImprovements(data.what_didnt_work || '');
-          setReflection(data.next_week_focus || '');
+          setWins(data.whatWorked || '');
+          setImprovements(data.whatDidntWork || '');
+          setReflection(data.nextWeekFocus || '');
         }
       } catch (error) {
         console.error('Error loading reflection:', error);
@@ -109,19 +102,12 @@ export default function WeeklyReview() {
     
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('weekly_reflections')
-        .upsert({
-          user_id: user.id,
-          week_start: weekStartStr,
-          what_worked: wins,
-          what_didnt_work: improvements,
-          next_week_focus: reflection,
-        }, {
-          onConflict: 'user_id,week_start'
-        });
-
-      if (error) throw error;
+      await reflectionsApi.save({
+        weekStart: weekStartStr,
+        whatWorked: wins,
+        whatDidntWork: improvements,
+        nextWeekFocus: reflection,
+      });
 
       setSaved(true);
       toast.success('Reflection saved!');
