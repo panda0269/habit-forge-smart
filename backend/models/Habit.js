@@ -38,12 +38,6 @@ const habitSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // Store original Supabase ID for idempotent migration
-  supabaseId: {
-    type: String,
-    default: null,
-    index: true
-  },
   createdAt: {
     type: Date,
     default: Date.now

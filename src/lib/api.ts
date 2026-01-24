@@ -42,6 +42,36 @@ export const apiRequest = async <T>(
   return response.json();
 };
 
+// File upload helper
+export const uploadFile = async (
+  endpoint: string,
+  file: File,
+  fieldName: string = 'file'
+): Promise<any> => {
+  const token = getToken();
+  
+  const formData = new FormData();
+  formData.append(fieldName, file);
+
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(error.error || 'Upload failed');
+  }
+
+  return response.json();
+};
+
 // Auth-specific API functions
 export const authApi = {
   register: async (email: string, password: string, displayName?: string) => {
@@ -77,10 +107,28 @@ export const authApi = {
     });
   },
 
+  uploadAvatar: async (file: File) => {
+    return uploadFile('/api/auth/upload-avatar', file, 'avatar');
+  },
+
   changePassword: async (currentPassword: string, newPassword: string) => {
     return apiRequest<{ message: string }>('/api/auth/password', {
       method: 'PUT',
       body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+
+  forgotPassword: async (email: string) => {
+    return apiRequest<{ message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword: async (token: string, newPassword: string) => {
+    return apiRequest<{ message: string }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
     });
   },
 };
@@ -237,6 +285,23 @@ export const aiApi = {
       body: JSON.stringify({ habits, userCategory, currentTime, dayOfWeek }),
     });
   },
+};
+
+// Helper to get avatar URL with API base
+export const getAvatarUrl = (avatarUrl: string | null | undefined): string | undefined => {
+  if (!avatarUrl) return undefined;
+  
+  // If it's already an absolute URL or data URL, return as-is
+  if (avatarUrl.startsWith('http') || avatarUrl.startsWith('data:')) {
+    return avatarUrl;
+  }
+  
+  // If it's a relative path, prepend API URL
+  if (avatarUrl.startsWith('/uploads/')) {
+    return `${API_URL}${avatarUrl}`;
+  }
+  
+  return avatarUrl;
 };
 
 export { getToken, setToken, removeToken };

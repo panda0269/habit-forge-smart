@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 
 // Demo seed value - last known sync
@@ -16,8 +15,7 @@ interface GoogleFitState {
 }
 
 export function useGoogleFit() {
-  const { user } = useAuth();
-  const [state, setState] = useState<GoogleFitState>({
+  const [state] = useState<GoogleFitState>({
     todaySteps: DEMO_INITIAL_STEPS,
     todayCalories: 0,
     todayDate: new Date().toISOString().split('T')[0],
@@ -28,12 +26,11 @@ export function useGoogleFit() {
   });
 
   // Google Fit is not available in standalone MERN mode
-  // This hook provides placeholder functionality
+  // This hook provides placeholder functionality for compatibility
   
   const syncData = useCallback(async (silent = false) => {
-    // Google Fit sync is not available without Supabase OAuth
     if (!silent) {
-      toast.info('Google Fit sync is not available in standalone mode');
+      toast.info('Fitness sync requires external API configuration');
     }
   }, []);
 
@@ -42,7 +39,7 @@ export function useGoogleFit() {
   }, []);
 
   const connectGoogleFit = async () => {
-    toast.info('Google Fit integration requires OAuth configuration');
+    toast.info('Fitness integration requires OAuth configuration');
   };
 
   return {

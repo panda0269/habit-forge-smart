@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Home, BarChart3, FileText, Trophy, Settings, Sparkles, LogOut, Bell, CalendarCheck, Activity, Medal } from 'lucide-react';
+import { Home, BarChart3, FileText, Trophy, Settings, Sparkles, LogOut, CalendarCheck, Activity, Medal, UserCog } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth, User } from '@/hooks/useAuth';
 import { useRewards } from '@/hooks/useRewards';
-import { useNotifications } from '@/hooks/useNotifications';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getAvatarUrl } from '@/lib/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -38,7 +38,7 @@ function UserProfileSection({ user, rewards }: { user: User | null; rewards: { x
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-sidebar-accent/50 mb-3">
       <Avatar className="h-10 w-10 border-2 border-primary/20">
-        <AvatarImage src={user.avatarUrl || undefined} />
+        <AvatarImage src={getAvatarUrl(user.avatarUrl)} />
         <AvatarFallback className="bg-primary/10 text-primary font-semibold">
           {user.displayName?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
         </AvatarFallback>
@@ -114,6 +114,14 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/settings">
+                    <UserCog className="w-4 h-4" />
+                    <span>Account Settings</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <div className="flex items-center justify-between px-3 py-2">
                   <span className="text-sm flex items-center gap-2">

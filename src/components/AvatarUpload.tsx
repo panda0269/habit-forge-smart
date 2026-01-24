@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { authApi } from '@/lib/api';
+import { authApi, getAvatarUrl } from '@/lib/api';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Camera, Loader2 } from 'lucide-react';
@@ -34,37 +34,41 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, size = 'md' }
 
       const file = event.target.files[0];
       
-      // Convert file to base64 for simple upload
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const base64 = reader.result as string;
-          
-          // Update profile with avatar URL (base64 data URL for now)
-          // In production, you'd upload to a file storage service
-          const { user: updatedUser } = await authApi.updateProfile({ avatarUrl: base64 });
-          
-          setAvatarUrl(base64);
-          onUploadComplete?.(base64);
-          toast.success('Avatar updated successfully!');
-        } catch (error) {
-          console.error('Error updating profile:', error);
-          toast.error('Failed to upload avatar');
-        }
-      };
-      reader.readAsDataURL(file);
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File too large. Maximum size is 5MB.');
+        return;
+      }
+      
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.');
+        return;
+      }
+
+      // Upload file to server
+      const { avatarUrl: newAvatarUrl } = await authApi.uploadAvatar(file);
+      
+      setAvatarUrl(newAvatarUrl);
+      onUploadComplete?.(newAvatarUrl);
+      toast.success('Avatar updated successfully!');
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      toast.error('Failed to upload avatar');
+      toast.error(error instanceof Error ? error.message : 'Failed to upload avatar');
     } finally {
       setUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
   return (
     <div className="relative group">
       <Avatar className={`${sizeClasses[size]} border-2 border-primary/20`}>
-        <AvatarImage src={avatarUrl || undefined} alt="Profile avatar" />
+        <AvatarImage src={getAvatarUrl(avatarUrl)} alt="Profile avatar" />
         <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">
           {user?.email?.charAt(0).toUpperCase()}
         </AvatarFallback>
@@ -74,7 +78,7 @@ export function AvatarUpload({ currentAvatarUrl, onUploadComplete, size = 'md' }
         type="file"
         ref={fileInputRef}
         onChange={handleUpload}
-        accept="image/*"
+        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
         className="hidden"
         disabled={uploading}
       />
