@@ -94,6 +94,7 @@ npm start     # Production
 - `POST /api/ai/recommendations` - Get AI recommendations
 - `POST /api/ai/chat` - Chat with AI assistant
 - `POST /api/ai/automation` - Get automation suggestions
+- `POST /api/ai/generate-image` - Generate motivational images
 
 ## File Uploads
 

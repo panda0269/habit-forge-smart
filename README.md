@@ -11,6 +11,7 @@ A production-ready MERN (MongoDB, Express, React, Node.js) habit tracking applic
 - 📅 **Weekly Reviews** - Reflect on your progress and plan ahead
 - 🏅 **Leaderboard** - Compete with other users
 - 🎁 **Rewards System** - Redeem XP for rewards
+- 🔐 **Secure Auth** - JWT-based authentication with password reset
 
 ## Tech Stack
 
@@ -78,6 +79,10 @@ cp .env.example .env
 # SMTP_USER=your-email@gmail.com
 # SMTP_PASS=your-app-password
 # FROM_EMAIL=noreply@habitforge.com
+#
+# AI API Keys (optional)
+# GEMINI_API_KEY=your-gemini-api-key
+# OPENAI_API_KEY=your-openai-api-key
 
 # Start development server
 npm run dev
@@ -128,6 +133,35 @@ npm start
 ### AI (requires API key configuration)
 - `POST /api/ai/recommendations` - Get AI recommendations
 - `POST /api/ai/chat` - Chat with AI assistant
+- `POST /api/ai/automation` - Get automation suggestions
+- `POST /api/ai/generate-image` - Generate motivational images
+
+## Environment Variables
+
+### Frontend (.env)
+```
+VITE_API_URL=http://localhost:5000
+```
+
+### Backend (.env)
+```
+PORT=5000
+MONGO_URI=mongodb://localhost:27017/habitforge
+JWT_SECRET=your-super-secret-key
+JWT_EXPIRES_IN=7d
+FRONTEND_URL=http://localhost:5173
+
+# SMTP (optional)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+FROM_EMAIL=noreply@habitforge.com
+
+# AI (optional)
+GEMINI_API_KEY=your-gemini-api-key
+OPENAI_API_KEY=your-openai-api-key
+```
 
 ## Deployment
 
