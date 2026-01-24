@@ -1,6 +1,15 @@
-# Habit Forge Backend
+# HabitForge Backend
 
-MERN backend for Habit Forge - MongoDB is the single source of truth for habits, logs, streaks, and stats.
+Production-ready MERN backend for HabitForge - MongoDB is the single source of truth for all data.
+
+## Tech Stack
+
+- **Node.js** with Express
+- **MongoDB** with Mongoose ODM
+- **JWT** for authentication
+- **bcrypt** for password hashing
+- **Multer** for file uploads
+- **Nodemailer** for password reset emails
 
 ## Setup
 
@@ -16,8 +25,21 @@ Copy `.env.example` to `.env` and configure:
 ```bash
 PORT=5000
 MONGO_URI=mongodb://localhost:27017/habitforge
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your-service-role-key
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_EXPIRES_IN=7d
+FRONTEND_URL=http://localhost:5173
+
+# SMTP Configuration for Password Reset
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+FROM_EMAIL=noreply@habitforge.com
+
+# Optional: AI API Keys
+# GEMINI_API_KEY=your-gemini-api-key
+# OPENAI_API_KEY=your-openai-api-key
 ```
 
 ## Running the Server
@@ -27,21 +49,17 @@ npm run dev   # Development with hot reload
 npm start     # Production
 ```
 
-## Migration from Supabase
-
-To migrate existing habit data from Supabase to MongoDB:
-
-```bash
-npm run migrate
-```
-
-This script:
-- Reads all habits and habit logs from Supabase
-- Inserts them into MongoDB (idempotent - safe to run multiple times)
-- Filters out test users (userId = "testuser")
-- Does NOT delete Supabase data
-
 ## API Endpoints
+
+### Authentication
+- `POST /api/auth/register` - Create new account
+- `POST /api/auth/login` - Login and get JWT token
+- `GET /api/auth/me` - Get current user (requires auth)
+- `PUT /api/auth/profile` - Update profile (requires auth)
+- `PUT /api/auth/password` - Change password (requires auth)
+- `POST /api/auth/upload-avatar` - Upload avatar image (requires auth)
+- `POST /api/auth/forgot-password` - Request password reset email
+- `POST /api/auth/reset-password` - Reset password with token
 
 ### Habits
 - `POST /api/habits` - Create a new habit
@@ -55,16 +73,52 @@ This script:
 - `GET /api/habit-logs/habit/:habitId` - Get logs for a specific habit
 - `DELETE /api/habit-logs/:id` - Delete a specific log
 
-### Stats
-- `GET /api/stats/:userId` - Get comprehensive stats (streaks, completion rates, etc.)
-- `GET /api/stats/leaderboard/all` - Get leaderboard data
+### Stats & Leaderboard
+- `GET /api/stats/:userId` - Get comprehensive stats
+- `GET /api/leaderboard` - Get leaderboard data
 
-### Health
-- `GET /health` - Returns "API running"
+### Rewards
+- `GET /api/rewards/user` - Get user rewards
+- `PUT /api/rewards/xp` - Add XP points
+- `GET /api/rewards/achievements` - Get all achievements
+- `POST /api/rewards/unlock-achievement` - Unlock achievement
+- `GET /api/rewards/redeemable` - Get redeemable rewards
+- `POST /api/rewards/redeem` - Redeem a reward
 
-## Notes
+### Reflections
+- `GET /api/reflections/:weekStart` - Get weekly reflection
+- `POST /api/reflections` - Save weekly reflection
+- `GET /api/reflections` - Get all reflections
 
-- Server runs on port 5000
-- MongoDB is required - install and run MongoDB locally or use MongoDB Atlas
-- This backend runs separately from the Lovable frontend
-- User authentication is handled by Supabase - use Supabase user.id as userId
+### AI (requires API key configuration)
+- `POST /api/ai/recommendations` - Get AI recommendations
+- `POST /api/ai/chat` - Chat with AI assistant
+- `POST /api/ai/automation` - Get automation suggestions
+
+## File Uploads
+
+Avatar images are stored in `uploads/avatars/` directory. The server serves these files statically.
+
+For production deployments, consider:
+- Using cloud storage (AWS S3, Cloudinary)
+- Implementing CDN for serving images
+- Setting up proper backup strategies
+
+## Security Notes
+
+- Change `JWT_SECRET` to a strong, unique value in production
+- Use HTTPS in production
+- Configure CORS properly for your domain
+- Implement rate limiting for API endpoints
+- Regularly update dependencies
+
+## Deployment
+
+Deploy to any Node.js hosting platform:
+- Render
+- Railway
+- Heroku
+- AWS EC2/ECS
+- DigitalOcean App Platform
+
+Ensure environment variables are configured in your hosting platform.
