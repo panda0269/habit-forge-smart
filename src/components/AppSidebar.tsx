@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Home, BarChart3, FileText, Trophy, Settings, Sparkles, LogOut, Bell, CalendarCheck, Activity, Medal } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, User } from '@/hooks/useAuth';
 import { useRewards } from '@/hooks/useRewards';
 import { useNotifications } from '@/hooks/useNotifications';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -22,7 +21,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { User } from '@supabase/supabase-js';
 
 const navItems = [
   { title: 'Dashboard', url: '/', icon: Home },
@@ -35,43 +33,36 @@ const navItems = [
 ];
 
 function UserProfileSection({ user, rewards }: { user: User | null; rewards: { xp_points: number; level: number } | null }) {
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('avatar_url')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (data) setAvatarUrl((data as any).avatar_url);
-    };
-    fetchProfile();
-  }, [user]);
+  if (!user) return null;
 
   return (
-    <div className="flex items-center gap-3 mb-3">
-      <Avatar className="w-8 h-8 border-2 border-primary/20">
-        <AvatarImage src={avatarUrl || undefined} />
-        <AvatarFallback className="bg-primary/20 text-primary text-sm font-medium">
-          {user?.email?.charAt(0).toUpperCase()}
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-sidebar-accent/50 mb-3">
+      <Avatar className="h-10 w-10 border-2 border-primary/20">
+        <AvatarImage src={user.avatarUrl || undefined} />
+        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+          {user.displayName?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
         </AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{user?.email}</p>
-        <p className="text-xs text-muted-foreground">
-          {rewards ? `${rewards.xp_points} XP` : 'Loading...'}
+        <p className="text-sm font-medium truncate">
+          {user.displayName || user.email.split('@')[0]}
         </p>
+        {rewards && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Sparkles className="w-3 h-3 text-accent" />
+            <span>Level {rewards.level}</span>
+            <span className="text-muted-foreground/50">•</span>
+            <span>{rewards.xp_points} XP</span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export function AppSidebar() {
-  const { signOut, user } = useAuth();
+  const { user, signOut } = useAuth();
   const { rewards } = useRewards();
-  const { permission, requestPermission } = useNotifications();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -82,21 +73,23 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r border-sidebar-border">
-      <SidebarHeader className="p-4">
+      <SidebarHeader className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-glow">
             <Sparkles className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-lg font-display font-bold text-sidebar-foreground">Habit Builder</h1>
-            <p className="text-xs text-muted-foreground">AI-Powered Tracking</p>
+            <h1 className="text-xl font-display font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              HabitForge
+            </h1>
+            <p className="text-xs text-muted-foreground">Smart Habit Tracker</p>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="px-3 py-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground">
+          <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider px-3 mb-2">
             Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -104,19 +97,9 @@ export function AppSidebar() {
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      end={item.url === '/'}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all hover:bg-sidebar-accent"
-                      activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                    >
-                      <item.icon className="w-5 h-5" />
+                    <NavLink to={item.url}>
+                      <item.icon className="w-4 h-4" />
                       <span>{item.title}</span>
-                      {item.title === 'Rewards' && rewards && (
-                        <span className="ml-auto text-xs bg-accent text-accent-foreground rounded-full px-2 py-0.5">
-                          Lvl {rewards.level}
-                        </span>
-                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -125,27 +108,19 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground">
+        <SidebarGroup className="mt-6">
+          <SidebarGroupLabel className="text-xs text-muted-foreground uppercase tracking-wider px-3 mb-2">
             Settings
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {permission !== 'granted' && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton onClick={requestPermission} className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all hover:bg-sidebar-accent">
-                    <Bell className="w-5 h-5" />
-                    <span>Enable Notifications</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
               <SidebarMenuItem>
-                <div className="flex items-center gap-3 px-3 py-2">
-                  <Settings className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-muted-foreground">Theme</span>
-                  <div className="ml-auto">
-                    <ThemeToggle />
-                  </div>
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-sm flex items-center gap-2">
+                    <Settings className="w-4 h-4" />
+                    Theme
+                  </span>
+                  <ThemeToggle />
                 </div>
               </SidebarMenuItem>
             </SidebarMenu>

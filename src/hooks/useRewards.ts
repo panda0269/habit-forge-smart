@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { rewardsApi } from '@/lib/api';
 import { UserRewards, Achievement, UserAchievement, XP_PER_COMPLETION, calculateLevel } from '@/lib/types';
 import { toast } from 'sonner';
 
@@ -19,46 +19,48 @@ export function useRewards() {
     }
 
     try {
-      // Fetch or create user rewards
-      let { data: rewardsData, error: rewardsError } = await supabase
-        .from('user_rewards')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (rewardsError) throw rewardsError;
-
-      if (!rewardsData) {
-        const { data: newRewards, error: createError } = await supabase
-          .from('user_rewards')
-          .insert({ user_id: user.id, xp_points: 0, level: 1 })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        rewardsData = newRewards;
-      }
-
-      setRewards(rewardsData as UserRewards);
+      // Fetch user rewards
+      const rewardsData = await rewardsApi.getUserRewards();
+      setRewards({
+        id: rewardsData.id || user.id,
+        user_id: user.id,
+        xp_points: rewardsData.xpPoints || 0,
+        level: rewardsData.level || 1,
+        created_at: rewardsData.createdAt || new Date().toISOString(),
+        updated_at: rewardsData.updatedAt || new Date().toISOString(),
+      });
 
       // Fetch all achievements
-      const { data: achievementsData, error: achievementsError } = await supabase
-        .from('achievements')
-        .select('*')
-        .order('requirement_value', { ascending: true });
-
-      if (achievementsError) throw achievementsError;
-      setAchievements(achievementsData as Achievement[]);
+      const achievementsData = await rewardsApi.getAchievements();
+      setAchievements(achievementsData.map((a: any) => ({
+        id: a._id,
+        name: a.name,
+        description: a.description,
+        icon: a.icon,
+        requirement_type: a.requirementType,
+        requirement_value: a.requirementValue,
+        xp_reward: a.xpReward,
+        created_at: a.createdAt,
+      })));
 
       // Fetch user achievements
-      const { data: userAchievementsData, error: userAchievementsError } = await supabase
-        .from('user_achievements')
-        .select('*, achievement:achievements(*)')
-        .eq('user_id', user.id);
-
-      if (userAchievementsError) throw userAchievementsError;
-      setUserAchievements(userAchievementsData as UserAchievement[]);
-
+      const userAchievementsData = await rewardsApi.getUserAchievements();
+      setUserAchievements(userAchievementsData.map((ua: any) => ({
+        id: ua.id,
+        user_id: ua.userId,
+        achievement_id: ua.achievementId,
+        unlocked_at: ua.unlockedAt,
+        achievement: ua.achievement ? {
+          id: ua.achievement._id,
+          name: ua.achievement.name,
+          description: ua.achievement.description,
+          icon: ua.achievement.icon,
+          requirement_type: ua.achievement.requirementType,
+          requirement_value: ua.achievement.requirementValue,
+          xp_reward: ua.achievement.xpReward,
+          created_at: ua.achievement.createdAt,
+        } : undefined,
+      })));
     } catch (err) {
       console.error('Error fetching rewards:', err);
     } finally {
@@ -69,24 +71,17 @@ export function useRewards() {
   const addXP = async (amount: number = XP_PER_COMPLETION) => {
     if (!user || !rewards) return;
 
-    const newXP = rewards.xp_points + amount;
-    const newLevel = calculateLevel(newXP);
+    try {
+      const result = await rewardsApi.addXP(amount);
+      
+      if (result.leveledUp) {
+        toast.success(`🎉 Level Up! You're now Level ${result.newLevel}!`);
+      }
 
-    const { error } = await supabase
-      .from('user_rewards')
-      .update({ xp_points: newXP, level: newLevel })
-      .eq('user_id', user.id);
-
-    if (error) {
+      await fetchRewards();
+    } catch (error) {
       console.error('Error adding XP:', error);
-      return;
     }
-
-    if (newLevel > rewards.level) {
-      toast.success(`🎉 Level Up! You're now Level ${newLevel}!`);
-    }
-
-    await fetchRewards();
   };
 
   const checkAndUnlockAchievements = async (stats: {
@@ -97,7 +92,7 @@ export function useRewards() {
   }) => {
     if (!user) return;
 
-    const unlockedIds = userAchievements.map(ua => ua.achievement_id);
+    const unlockedIds = userAchievements.map((ua) => ua.achievement_id);
     const newAchievements: Achievement[] = [];
 
     for (const achievement of achievements) {
@@ -120,13 +115,11 @@ export function useRewards() {
       }
 
       if (unlocked) {
-        const { error } = await supabase
-          .from('user_achievements')
-          .insert({ user_id: user.id, achievement_id: achievement.id });
-
-        if (!error) {
+        try {
+          await rewardsApi.unlockAchievement(achievement.id);
           newAchievements.push(achievement);
-          await addXP(achievement.xp_reward);
+        } catch (error) {
+          console.error('Error unlocking achievement:', error);
         }
       }
     }
