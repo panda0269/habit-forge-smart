@@ -24,7 +24,9 @@ const allowedOrigins = [
   'http://localhost:8080',
   'https://habit-forge-smart.vercel.app',
   'https://habit-forge-smart-4iu5w1nec-nishants-projects-e0b7db68.vercel.app',
-  /^https:\/\/habit-forge-smart-.*\.vercel\.app$/,  // All Vercel preview URLs
+  /^https:\/\/habit-forge-smart-.*\.vercel\.app$/,
+  'https://www.habitbuilder.co.in',  // ← ADD THIS LINE
+  'https://habitbuilder.co.in', 
 ];
 
 // Middleware
