@@ -10,6 +10,7 @@ import { HabitCategory, HabitFrequency, CATEGORY_CONFIG, FREQUENCY_CONFIG } from
 import { toast } from 'sonner';
 import { Loader2, Bell, Clock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { habitsApi } from '@/lib/api';
 
 interface CreateHabitDialogProps {
   open: boolean;
@@ -43,27 +44,16 @@ export function CreateHabitDialog({ open, onOpenChange, onHabitCreated }: Create
 
     setLoading(true);
     try {
-      // Create habit in MERN backend (MongoDB - single source of truth)
-      const mernResponse = await fetch('http://localhost:5000/api/habits', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          title: title.trim(),
-          category,
-          frequency,
-          color: '#10B981',
-          reminderEnabled,
-          reminderTime: reminderEnabled ? reminderTime : null,
-        }),
+      // Create habit using centralized API
+      await habitsApi.create({
+        userId: user.id,
+        title: title.trim(),
+        category,
+        frequency,
+        color: '#10B981',
+        reminderEnabled,
+        reminderTime: reminderEnabled ? reminderTime : null,
       });
-
-      if (!mernResponse.ok) {
-        const errorData = await mernResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to create habit');
-      }
       
       toast.success('Habit created!');
       setTitle('');
