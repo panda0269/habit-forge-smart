@@ -17,22 +17,29 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 /* =========================
-   CORS CONFIG (FINAL)
+   ✅ CORS CONFIG (FINAL)
 ========================= */
 
 const allowedOrigins = [
+  // Local development
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:8080',
-  'https://habit-forge-smart.vercel.app',
-  'https://www.habitbuilder.co.in',
+
+  // Root domains
   'https://habitbuilder.co.in',
+  'https://www.habitbuilder.co.in',
+
+  // Any subdomain (app.habitbuilder.co.in, etc.)
+  /^https:\/\/.*\.habitbuilder\.co\.in$/,
+
+  // Vercel preview deployments
   /^https:\/\/habit-forge-smart-.*\.vercel\.app$/
 ];
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow server-to-server / curl / Postman
+    // Allow server-to-server, Postman, curl
     if (!origin) return callback(null, true);
 
     const isAllowed = allowedOrigins.some(o =>
@@ -42,8 +49,8 @@ const corsOptions = {
     if (isAllowed) {
       callback(null, true);
     } else {
-      console.error('❌ CORS blocked:', origin);
-      callback(new Error('Not allowed by CORS'));
+      console.warn('❌ CORS blocked:', origin);
+      callback(null, false); // ❗ DO NOT throw error (prevents 500)
     }
   },
   credentials: true,
@@ -52,7 +59,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // 🔥 REQUIRED FOR PREFLIGHT
+app.options('*', cors(corsOptions)); // 🔥 REQUIRED for preflight
 
 /* =========================
    MIDDLEWARE
@@ -76,7 +83,7 @@ app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/ai', aiRoutes);
 
 /* =========================
-   HEALTH & ROOT
+   HEALTH CHECK
 ========================= */
 
 app.get('/health', (req, res) => {
@@ -84,13 +91,6 @@ app.get('/health', (req, res) => {
     status: 'ok',
     message: 'HabitForge API running',
     timestamp: new Date().toISOString()
-  });
-});
-
-app.get('/', (req, res) => {
-  res.json({
-    name: 'HabitForge API',
-    version: '1.0.0'
   });
 });
 
@@ -124,6 +124,5 @@ const connectDB = async () => {
 connectDB().then(() => {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`🩺 Health: http://localhost:${PORT}/health`);
   });
 });
