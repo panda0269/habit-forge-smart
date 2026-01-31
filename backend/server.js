@@ -17,7 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 /* =========================
-   ✅ CORS CONFIG (FINAL)
+   CORS 
 ========================= */
 
 const allowedOrigins = [
@@ -25,14 +25,17 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:8080',
-
+  
   // Root domains
   'https://habitbuilder.co.in',
   'https://www.habitbuilder.co.in',
-
+  
+   //vercel
+  'https://habit-forge-smart.vercel.app',
+  
   // Any subdomain (app.habitbuilder.co.in, etc.)
   /^https:\/\/.*\.habitbuilder\.co\.in$/,
-
+  
   // Vercel preview deployments
   /^https:\/\/habit-forge-smart-.*\.vercel\.app$/
 ];
@@ -41,16 +44,16 @@ const corsOptions = {
   origin: (origin, callback) => {
     // Allow server-to-server, Postman, curl
     if (!origin) return callback(null, true);
-
+    
     const isAllowed = allowedOrigins.some(o =>
       o instanceof RegExp ? o.test(origin) : o === origin
     );
-
+    
     if (isAllowed) {
-      callback(null, true);
+      callback(null, origin); 
     } else {
       console.warn('❌ CORS blocked:', origin);
-      callback(null, false); // ❗ DO NOT throw error (prevents 500)
+      callback(null, false);
     }
   },
   credentials: true,
@@ -59,16 +62,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // 🔥 REQUIRED for preflight
-
-/* =========================
-   MIDDLEWARE
-========================= */
-
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
+app.options('*', cors(corsOptions));
 /* =========================
    ROUTES
 ========================= */
@@ -114,15 +108,15 @@ app.use((err, req, res, next) => {
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    console.log('✅ MongoDB connected');
+    console.log(' MongoDB connected');
   } catch (err) {
-    console.error('❌ MongoDB connection failed:', err.message);
+    console.error(' MongoDB connection failed:', err.message);
     process.exit(1);
   }
 };
 
 connectDB().then(() => {
   app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(` Server running on port ${PORT}`);
   });
 });
